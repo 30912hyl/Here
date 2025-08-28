@@ -52,6 +52,15 @@ struct PersistenceController {
                 fatalError("Unresolved error \(error), \(error.userInfo)")
             }
         })
+        let context = container.viewContext
+        let fetchRequest: NSFetchRequest<Post> = Post.fetchRequest()
+        if (try? context.count(for: fetchRequest)) == 0 {
+            let post = Post(context: context)
+            post.title = "where is my ba?"
+            post.content = "This is a's first post about ba"
+            post.timestamp = Date()
+            try? context.save()
+        }
         container.viewContext.automaticallyMergesChangesFromParent = true
     }
 }
