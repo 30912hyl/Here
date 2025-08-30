@@ -1,2 +1,6 @@
 # Ignore user-specific Xcode data
 *xcworkspace/xcuserdata/*
+*/xcuserdata/*
+*.xcuserstate
+*.xcodeproj/xcuserdata/
+xcuserdata/
