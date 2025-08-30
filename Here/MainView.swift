@@ -24,14 +24,6 @@ struct MessageView: View {
     }
 }
 
-struct ProfileView: View {
-    var body: some View {
-        Text("Profile")
-            .font(.largeTitle)
-            .padding()
-    }
-}
-
 struct MainView: View {
     @StateObject private var model = FrameHandler()
     @State private var cameraStarted = false

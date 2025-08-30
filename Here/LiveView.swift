@@ -7,34 +7,24 @@
 
 import SwiftUI
 
-/*
-func setupLocalVideo() {
-    let videoCanvas = AgoraRtcVideoCanvas()
-    videoCanvas.view = localView
-    videoCanvas.uid = 0  // UID 0 is assigned to the local user
-    videoCanvas.renderMode = .hidden
-    agoraKit.setupLocalVideo(videoCanvas)
-}
-
-func setupRemoteVideo(uid: UInt, view: UIView?) {
-    let videoCanvas = AgoraRtcVideoCanvas()
-    videoCanvas.uid = uid
-    videoCanvas.view = view // Assign view for joining, set to nil for leaving
-    videoCanvas.renderMode = .hidden
-    agoraKit.setupRemoteVideo(videoCanvas)
-}*/
-
 struct LiveView: View {
     @Binding var isCallActive: Bool
     @StateObject private var agoraManager = AgoraAudioManager()
     @State private var callDuration: TimeInterval = 0
     @State private var timer: Timer?
     @State private var showingCategories = false
+    @State private var username = "Bala" // This should come from your profile data
 
     // Mock user data - replace with actual user data
-    let currentUser = User(name: "Bala", profileImage: "person.circle.fill", themeColor: Color.purple.opacity(0.8))
-    let otherUser = User(name: "A a", profileImage: "person.circle.fill", themeColor: Color.red.opacity(0.8))
-        
+
+    var currentUser: User {
+        User(name: username, profileImage: "person.circle.fill", themeColor: Color.purple.opacity(0.8))
+    }
+
+    var otherUser: User {
+        User(name: agoraManager.remoteUsername, profileImage: "person.circle.fill", themeColor: Color.red.opacity(0.8))
+    }
+    
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
@@ -82,7 +72,7 @@ struct LiveView: View {
                             )
                             
                             Text(agoraManager.remoteUserJoined ?
-                                 "User \(agoraManager.remoteUserId)" :
+                                 agoraManager.remoteUsername:
                                  "Waiting for someone...")
                                 .font(.title2)
                                 .fontWeight(.medium)
@@ -101,7 +91,7 @@ struct LiveView: View {
                                 isSpeaking: !agoraManager.isMuted && agoraManager.isConnected
                             )
                             
-                            Text("You (ID: \(agoraManager.localUserId))")
+                            Text("You (\(username))")
                                 .font(.title3)
                                 .fontWeight(.medium)
                                 .foregroundColor(.white.opacity(0.8))
@@ -153,6 +143,9 @@ struct LiveView: View {
                 if isCallActive && !agoraManager.isCallActive {
                     startNewCall()
                 }
+                
+                // Load username from UserDefaults or ProfileManager
+                loadUsername()
             }
             .onDisappear {
                 // Don't automatically leave channel when view disappears
@@ -170,8 +163,17 @@ struct LiveView: View {
         }
     }
     
+    
+    private func loadUsername() {
+        // Load username from UserDefaults (or your preferred storage method)
+        if let savedUsername = UserDefaults.standard.string(forKey: "username"), !savedUsername.isEmpty {
+            username = savedUsername
+        }
+    }
+    
     private func startNewCall() {
-        agoraManager.joinChannel()
+        loadUsername()
+        agoraManager.joinChannel(with: username)
         startCallTimer()
     }
     
