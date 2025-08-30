@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		937345F12E60356F00A79E39 /* RtcBasic in Frameworks */ = {isa = PBXBuildFile; productRef = 937345F02E60356F00A79E39 /* RtcBasic */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		93D2826B2E3B369000C524D7 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				937345F12E60356F00A79E39 /* RtcBasic in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = Here;
 			packageProductDependencies = (
+				937345F02E60356F00A79E39 /* RtcBasic */,
 			);
 			productName = Here;
 			productReference = 93D282582E3B368E00C524D7 /* Here.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = 93D2824F2E3B368E00C524D7;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				937345EF2E60356F00A79E39 /* XCRemoteSwiftPackageReference "AgoraRtcEngine_iOS" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 93D282592E3B368E00C524D7 /* Products */;
 			projectDirPath = "";
@@ -401,7 +410,6 @@
 				DEVELOPMENT_TEAM = GBMC68KS5K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to join live video chats.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone to send audio recordings and join live audio chats.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -433,7 +441,6 @@
 				DEVELOPMENT_TEAM = GBMC68KS5K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to join live video chats.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app uses the microphone to send audio recordings and join live audio chats.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -566,6 +573,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		937345EF2E60356F00A79E39 /* XCRemoteSwiftPackageReference "AgoraRtcEngine_iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AgoraIO/AgoraRtcEngine_iOS.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		937345F02E60356F00A79E39 /* RtcBasic */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 937345EF2E60356F00A79E39 /* XCRemoteSwiftPackageReference "AgoraRtcEngine_iOS" */;
+			productName = RtcBasic;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 93D282502E3B368E00C524D7 /* Project object */;
 }

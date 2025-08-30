@@ -7,15 +7,30 @@
 
 import SwiftUI
 
+/*
+func setupLocalVideo() {
+    let videoCanvas = AgoraRtcVideoCanvas()
+    videoCanvas.view = localView
+    videoCanvas.uid = 0  // UID 0 is assigned to the local user
+    videoCanvas.renderMode = .hidden
+    agoraKit.setupLocalVideo(videoCanvas)
+}
+
+func setupRemoteVideo(uid: UInt, view: UIView?) {
+    let videoCanvas = AgoraRtcVideoCanvas()
+    videoCanvas.uid = uid
+    videoCanvas.view = view // Assign view for joining, set to nil for leaving
+    videoCanvas.renderMode = .hidden
+    agoraKit.setupRemoteVideo(videoCanvas)
+}*/
+
 struct LiveView: View {
     @Binding var isCallActive: Bool
-    @State private var isMuted = false
-    @State private var isSpeakerOn = false
+    @StateObject private var agoraManager = AgoraAudioManager()
     @State private var callDuration: TimeInterval = 0
     @State private var timer: Timer?
-    @State private var internalCallActive = true // Internal state for call UI
     @State private var showingCategories = false
-    
+
     // Mock user data - replace with actual user data
     let currentUser = User(name: "Bala", profileImage: "person.circle.fill", themeColor: Color.purple.opacity(0.8))
     let otherUser = User(name: "A a", profileImage: "person.circle.fill", themeColor: Color.red.opacity(0.8))
@@ -35,43 +50,58 @@ struct LiveView: View {
                     )
                     .ignoresSafeArea()
                     
-                    if internalCallActive {
-                        VStack(spacing: 10) { // Reduced from 40 to bring rectangles closer
+                    if agoraManager.isCallActive {
+                        VStack(spacing: 10) {
+                            // Connection status
+                            HStack {
+                                Circle()
+                                    .fill(agoraManager.isConnected ?
+                                          (agoraManager.remoteUserJoined ? Color.green : Color.orange) :
+                                            
+                                          Color.red)
+                                    .frame(width: 8, height: 8)
+                                Text(agoraManager.statusText)
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.top, 5)
+                            
                             // Call duration
                             Text(formatDuration(callDuration))
                                 .font(.caption)
                                 .foregroundColor(.gray)
-                                .padding(.top, 5)
                             
                             // Other user profile (top)
                             LiveUserView(
                                 user: otherUser,
-                                profileSize: 100, // Adjustable profile picture size
-                                posX: 0, // X offset from center
-                                posY: 30, // Y offset from center
+                                profileSize: 100,
+                                posX: 0,
+                                posY: 30,
                                 isCurrentUser: false,
-                                isSpeaking: false
+                                isSpeaking: agoraManager.remoteUserJoined
                             )
                             
-                            Text(otherUser.name)
+                            Text(agoraManager.remoteUserJoined ?
+                                 "User \(agoraManager.remoteUserId)" :
+                                 "Waiting for someone...")
                                 .font(.title2)
                                 .fontWeight(.medium)
                                 .foregroundColor(.white)
                                 .padding(.top, 10)
                             
-                            Spacer().frame(height: 20) // Small spacer between rectangles
+                            Spacer().frame(height: 20)
                             
                             // Current user profile (bottom)
                             LiveUserView(
                                 user: currentUser,
-                                profileSize: 100, // Different profile size for current user
-                                posX: 0, // X offset from center
-                                posY: 30, // Y offset from center
+                                profileSize: 100,
+                                posX: 0,
+                                posY: 30,
                                 isCurrentUser: true,
-                                isSpeaking: !isMuted
+                                isSpeaking: !agoraManager.isMuted && agoraManager.isConnected
                             )
                             
-                            Text(currentUser.name)
+                            Text("You (ID: \(agoraManager.localUserId))")
                                 .font(.title3)
                                 .fontWeight(.medium)
                                 .foregroundColor(.white.opacity(0.8))
@@ -83,11 +113,11 @@ struct LiveView: View {
                             HStack(spacing: 30) {
                                 // Mute button
                                 AudioControlButton(
-                                    systemImage: isMuted ? "mic.slash.fill" : "mic.fill",
-                                    isActive: !isMuted,
-                                    backgroundColor: isMuted ? .red : .gray.opacity(0.3)
+                                    systemImage: agoraManager.isMuted ? "mic.slash.fill" : "mic.fill",
+                                    isActive: !agoraManager.isMuted,
+                                    backgroundColor: agoraManager.isMuted ? .red : .gray.opacity(0.3)
                                 ) {
-                                    isMuted.toggle()
+                                    agoraManager.toggleMute()
                                 }
                                 
                                 // End call button
@@ -102,11 +132,11 @@ struct LiveView: View {
                                 
                                 // Speaker button
                                 AudioControlButton(
-                                    systemImage: isSpeakerOn ? "speaker.wave.3.fill" : "speaker.wave.1.fill",
-                                    isActive: isSpeakerOn,
-                                    backgroundColor: isSpeakerOn ? .blue : .gray.opacity(0.3)
+                                    systemImage: agoraManager.isSpeakerOn ? "speaker.wave.3.fill" : "speaker.wave.1.fill",
+                                    isActive: agoraManager.isSpeakerOn,
+                                    backgroundColor: agoraManager.isSpeakerOn ? .blue : .gray.opacity(0.3)
                                 ) {
-                                    isSpeakerOn.toggle()
+                                    agoraManager.toggleSpeaker()
                                 }
                             }
                             .padding(.bottom, 40)
@@ -115,31 +145,36 @@ struct LiveView: View {
                     }
                 }
             }
-            .toolbar(internalCallActive ? .hidden : .visible, for: .tabBar)
+            .toolbar(agoraManager.isCallActive ? .hidden : .visible, for: .tabBar)
             .navigationDestination(isPresented: $showingCategories) {
                 CategoryView(isCallActive: $isCallActive)
             }
             .onAppear {
-                if isCallActive {
-                    startCallTimer()
+                if isCallActive && !agoraManager.isCallActive {
+                    startNewCall()
                 }
             }
             .onDisappear {
-                stopCallTimer()
+                // Don't automatically leave channel when view disappears
+                // User should explicitly end call
             }
             .onChange(of: isCallActive) { _, newValue in
-                if newValue {
-                    // Starting a new call
-                    internalCallActive = true
-                    startCallTimer()
+                if newValue && !agoraManager.isCallActive {
+                    startNewCall()
                     showingCategories = false
-                } else {
-                    // Call ended
+                } else if !newValue && agoraManager.isCallActive {
+                    agoraManager.leaveChannel()
                     stopCallTimer()
                 }
             }
         }
     }
+    
+    private func startNewCall() {
+        agoraManager.joinChannel()
+        startCallTimer()
+    }
+    
     private func startCallTimer() {
         callDuration = 0
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
@@ -154,7 +189,7 @@ struct LiveView: View {
     
     private func endCall() {
         isCallActive = false
-        internalCallActive = false
+        agoraManager.leaveChannel()
         stopCallTimer()
         callDuration = 0
         // Add your end call logic here
@@ -248,6 +283,7 @@ struct User {
         self.themeColor = themeColor
     }
 }
+
 
 #Preview {
     @State var isCallActive = true
