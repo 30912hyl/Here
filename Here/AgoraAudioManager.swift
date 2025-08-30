@@ -26,6 +26,8 @@ class AgoraAudioManager: NSObject, ObservableObject {
     @Published var localUserId: UInt = 0
     @Published var statusText = "Initializing..."
     @Published var remoteUsername = "A a"
+    @Published var startTimer = false
+    
     // Dictionary to store user ID to username mapping
     private var userIdToUsername: [UInt: String] = [:]
     private var dataStreamId: Int = 0
@@ -106,7 +108,7 @@ class AgoraAudioManager: NSObject, ObservableObject {
         remoteUserId = 0
         remoteUsername = "A a"
         userIdToUsername.removeAll()
-        
+        startTimer = false
         statusText = "Disconnected"
     }
     
@@ -188,6 +190,7 @@ extension AgoraAudioManager: AgoraRtcEngineDelegate {
                 if uid == self.remoteUserId {
                     self.remoteUsername = username
                     self.statusText = "Connected with \(username)"
+                    self.startTimer = true
                 }
                 print("Received username '\(username)' from user \(uid)")
             }

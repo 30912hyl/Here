@@ -31,7 +31,7 @@ struct MainView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            LiveView(isCallActive: $cameraStarted)
+            CategoryView(isCallActive: $cameraStarted)
                 .tabItem {
                     Label("Live", systemImage: "video.circle")
                 }
@@ -55,12 +55,12 @@ struct MainView: View {
                 }
                 .tag(3)
         }
+        .fullScreenCover(isPresented: $cameraStarted) {
+            LiveView(isCallActive: $cameraStarted)
+        }
         .onChange(of: selectedTab) { oldTab, newTab in
-            if newTab == 0 {
-                // Start call when entering Live tab
-                cameraStarted = true
-            } else {
-                // Stop call when leaving Live tab
+            if newTab != 0 {
+                // Stop call when not in Live tab
                 cameraStarted = false
             }
         }

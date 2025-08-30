@@ -160,6 +160,11 @@ struct LiveView: View {
                     stopCallTimer()
                 }
             }
+            .onChange(of: agoraManager.startTimer) { _, shouldStart in
+                if shouldStart && timer == nil {
+                    startCallTimer()
+                }
+            }
         }
     }
     
@@ -174,7 +179,6 @@ struct LiveView: View {
     private func startNewCall() {
         loadUsername()
         agoraManager.joinChannel(with: username)
-        startCallTimer()
     }
     
     private func startCallTimer() {
