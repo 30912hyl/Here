@@ -158,6 +158,10 @@ struct LiveView: View {
                 } else if !newValue && agoraManager.isCallActive {
                     agoraManager.leaveChannel()
                     stopCallTimer()
+                } else if newValue && agoraManager.isCallActive && agoraManager.inWaitingRoom {
+                    // Transition from waiting room to live call
+                    agoraManager.transitionToLiveCall()
+                    startCallTimer()
                 }
             }
             .onChange(of: agoraManager.startTimer) { _, shouldStart in

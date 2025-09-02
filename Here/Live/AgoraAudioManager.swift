@@ -25,17 +25,23 @@ class AgoraAudioManager: NSObject, ObservableObject {
     @Published var remoteUserId: UInt = 0
     @Published var localUserId: UInt = 0
     @Published var statusText = "Initializing..."
-    @Published var remoteUsername = "A a"
+    @Published var remoteUsername = "Unknown"
     @Published var startTimer = false
+    @Published var inWaitingRoom = false
     
     // Dictionary to store user ID to username mapping
     private var userIdToUsername: [UInt: String] = [:]
     private var dataStreamId: Int = 0
+    private var currentUsername: String = "Bala"
     
     // Send username to all users in the channel
     private func sendUsername(_ username: String) {
         guard dataStreamId != 0 else {
-            print("Data stream not ready, cannot send username")
+            print("Data stream not ready, queuing username send")
+            // Queue the username to send once stream is ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                self.sendUsername(username)
+            }
             return
         }
         
@@ -60,16 +66,30 @@ class AgoraAudioManager: NSObject, ObservableObject {
     
     func initializeAgoraVoiceSDK() {
         agoraKit = AgoraRtcEngineKit.sharedEngine(withAppId: appId, delegate: self)
+        agoraKit.enableAudioVolumeIndication(250, smooth: 3, reportVad: true)
         statusText = "Ready to connect"
     }
     
     func joinChannel(with username: String = "Bala") {
+        currentUsername = username
         let options = AgoraRtcChannelMediaOptions()
         options.channelProfile = .communication
         options.clientRoleType = .broadcaster
         options.publishMicrophoneTrack = true
         options.autoSubscribeAudio = true
         
+        // Create data stream configuration
+        let dataStreamConfig = AgoraDataStreamConfig()
+        dataStreamConfig.ordered = true
+        dataStreamConfig.syncWithAudio = false
+
+        // Create data stream before joining
+        var streamId: Int = 0
+        let streamResult = agoraKit.createDataStream(&streamId, config: dataStreamConfig)
+        if streamResult == 0 {
+            dataStreamId = streamId
+            print("Data stream created successfully with ID: \(streamId)")
+        }
         
         let result = agoraKit.joinChannel(
             byToken: token,
@@ -80,41 +100,48 @@ class AgoraAudioManager: NSObject, ObservableObject {
         
         if result == 0 {
             isCallActive = true
+            inWaitingRoom = true
             statusText = "Connecting..."
-            
-            // Create data stream for username exchange after joining
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                let dataStreamConfig = AgoraDataStreamConfig()
-                dataStreamConfig.ordered = true
-                dataStreamConfig.syncWithAudio = false
-                
-                var streamId: Int = 0
-                let result = self.agoraKit.createDataStream(&streamId, config: dataStreamConfig)
-                if result == 0 {
-                    self.dataStreamId = streamId
-                    self.sendUsername(username)
-                }
-            }
+            print("Joining channel with username: \(username)")
         } else {
             statusText = "Failed to join channel"
+            print("Failed to join channel, error: \(result)")
         }
+    }
+    
+    func transitionToLiveCall() {
+        // This is called when transitioning from waiting room to live call
+        inWaitingRoom = false
+        startTimer = true
+        statusText = "In call with \(remoteUsername)"
+        print("Transitioned to live call with \(remoteUsername)")
     }
     
     func leaveChannel() {
         agoraKit.leaveChannel(nil)
+        resetState()
+    }
+
+    private func resetState() {
         isCallActive = false
         isConnected = false
         remoteUserJoined = false
         remoteUserId = 0
-        remoteUsername = "A a"
+        remoteUsername = "Unknown"
         userIdToUsername.removeAll()
         startTimer = false
+        inWaitingRoom = false
+        dataStreamId = 0
         statusText = "Disconnected"
     }
     
     func toggleMute() {
         isMuted.toggle()
         agoraKit.muteLocalAudioStream(isMuted)
+        // Send updated status if we have remote users
+        if remoteUserJoined {
+            statusText = isMuted ? "Muted in call with \(remoteUsername)" : "In call with \(remoteUsername)"
+        }
     }
     
     func toggleSpeaker() {
@@ -123,15 +150,9 @@ class AgoraAudioManager: NSObject, ObservableObject {
     }
     
     
-    // Function to simulate receiving username from remote user
-    // In a real implementation, you'd use Agora's data stream or custom signaling
-    private func updateRemoteUsername(for uid: UInt) {
-        // This is a placeholder - in a real app you'd:
-        // 1. Use Agora's data stream to exchange usernames
-        // 2. Use a backend service to map UIDs to usernames
-        // 3. Use custom signaling
-        userIdToUsername[uid] = "A a"
-        remoteUsername = "A a"
+    // Function to get display name for remote user
+    private func getDisplayName(for uid: UInt) -> String {
+        return userIdToUsername[uid] ?? "User \(uid)"
     }
 }
 
@@ -140,38 +161,62 @@ extension AgoraAudioManager: AgoraRtcEngineDelegate {
         DispatchQueue.main.async {
             self.isConnected = true
             self.localUserId = uid
-            self.statusText = "Connected - Waiting for other users"
+            self.statusText = self.inWaitingRoom ? "Connected - Looking for someone..." : "Connected"
             print("Successfully joined channel: \(channel) with UID: \(uid)")
+            // Send username after a brief delay to ensure data stream is ready
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.sendUsername(self.currentUsername)
+            }
         }
     }
     
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinedOfUid uid: UInt, elapsed: Int) {
         DispatchQueue.main.async {
-            self.remoteUserJoined = true
-            self.remoteUserId = uid
-            self.updateRemoteUsername(for: uid)
-            self.statusText = "Connected with \(self.remoteUsername)"
-            print("User \(uid) joined after \(elapsed) milliseconds")
-            
-            // Send our username again when someone new joins
-            if let currentUsername = UserDefaults.standard.string(forKey: "username"), !currentUsername.isEmpty {
-                self.sendUsername(currentUsername)
-            } else {
-                self.sendUsername("Bala")
+            // If this is the first remote user and we're in waiting room
+            if !self.remoteUserJoined {
+                self.remoteUserJoined = true
+                self.remoteUserId = uid
+                
+                // Set initial display name
+                self.remoteUsername = self.getDisplayName(for: uid)
+                
+                if self.inWaitingRoom {
+                    self.statusText = "Found someone! Connecting..."
+                } else {
+                    self.statusText = "Connected with \(self.remoteUsername)"
+                    self.startTimer = true
+                }
+                
+                // Send our username to the new user
+                self.sendUsername(self.currentUsername)
             }
+            
+            print("Remote user joined: \(uid), username: \(self.getDisplayName(for: uid))")
+
         }
     }
     
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOfflineOfUid uid: UInt, reason: AgoraUserOfflineReason) {
         DispatchQueue.main.async {
+            print("User \(uid) left: Reason -> \(reason)")
+            
             if uid == self.remoteUserId {
+                // Primary remote user left
                 self.remoteUserJoined = false
                 self.remoteUserId = 0
-                self.remoteUsername = "Anonymous"
+                self.remoteUsername = "Unknown"
                 self.userIdToUsername.removeValue(forKey: uid)
-                self.statusText = "User left - Waiting for other users"
+                self.startTimer = false
+                
+                if self.inWaitingRoom {
+                    self.statusText = "User left - Looking for someone..."
+                } else {
+                    self.statusText = "Call ended - User left"
+                }
+            } else {
+                // Remove from username mapping
+                self.userIdToUsername.removeValue(forKey: uid)
             }
-            print("User \(uid) left: Reason -> \(reason)")
         }
     }
     
@@ -184,28 +229,29 @@ extension AgoraAudioManager: AgoraRtcEngineDelegate {
     
     // Handle incoming data stream messages (usernames)
     func rtcEngine(_ engine: AgoraRtcEngineKit, receiveStreamMessageFromUid uid: UInt, streamId: Int, data: Data) {
-        if let username = String(data: data, encoding: .utf8) {
+        if let username = String(data: data, encoding: .utf8), !username.isEmpty {
             DispatchQueue.main.async {
+                print("Received username '\(username)' from user \(uid)")
+                
+                // Store the username mapping
                 self.userIdToUsername[uid] = username
+                
+                // If this is our current remote user, update the display
                 if uid == self.remoteUserId {
                     self.remoteUsername = username
-                    self.statusText = "Connected with \(username)"
-                    self.startTimer = true
+                    
+                    if self.inWaitingRoom {
+                        self.statusText = "Found \(username)! Connecting..."
+                    } else {
+                        self.statusText = "In call with \(username)"
+                    }
                 }
-                print("Received username '\(username)' from user \(uid)")
             }
         }
     }
     
-    // Handle data stream creation
-    func rtcEngine(_ engine: AgoraRtcEngineKit, didCreateDataStream streamId: Int) {
-        dataStreamId = streamId
-        print("Data stream created with ID: \(streamId)")
-        // Send username immediately after data stream is created
-        if let currentUsername = UserDefaults.standard.string(forKey: "username"), !currentUsername.isEmpty {
-            sendUsername(currentUsername)
-        } else {
-            sendUsername("Bala")
-        }
+    // Handle data stream errors
+    func rtcEngine(_ engine: AgoraRtcEngineKit, didOccurStreamMessageErrorFromUid uid: UInt, streamId: Int, error: Int, missed: Int, cached: Int) {
+        print("Stream message error from \(uid): \(error), missed: \(missed), cached: \(cached)")
     }
 }

@@ -10,6 +10,7 @@ import SwiftUI
 struct CategoryView: View {
     @Binding var isCallActive: Bool
     @State private var selectedCategory: String? = nil
+    @State private var showingWaitingRoom = false
     
     let categories = [
         CategoryItem(title: "Positive", color: Color.green.opacity(0.8), icon: "face.smiling"),
@@ -74,6 +75,15 @@ struct CategoryView: View {
                     .padding(.bottom, 40)
             }
         }
+        .sheet(isPresented: $showingWaitingRoom) {
+            if let category = selectedCategory {
+                WaitingRoomView(
+                    selectedCategory: category,
+                    isCallActive: $isCallActive,
+                    showingWaitingRoom: $showingWaitingRoom
+                )
+            }
+        }
         //.toolbar(.hidden, for: .tabBar) // Hide tab bar on categories screen
     }
     
@@ -86,7 +96,7 @@ struct CategoryView: View {
         
         // Small delay for visual feedback, then start call
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            isCallActive = true
+            showingWaitingRoom = true
         }
     }
 }
