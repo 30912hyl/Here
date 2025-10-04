@@ -28,7 +28,11 @@ struct MainView: View {
     @StateObject private var model = FrameHandler()
     @State private var cameraStarted = false
     @State private var selectedTab = 0
-
+    
+    init(isPreview: Bool = false) {
+            _model = StateObject(wrappedValue: FrameHandler(isPreview: isPreview))
+        }
+    
     var body: some View {
         TabView(selection: $selectedTab) {
             CategoryView(isCallActive: $cameraStarted)
@@ -68,6 +72,8 @@ struct MainView: View {
 }
 
 #Preview {
-    MainView().environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
+    MainView(isPreview: true)
 }
+
+
 

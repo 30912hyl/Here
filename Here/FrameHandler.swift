@@ -14,9 +14,15 @@ class FrameHandler: NSObject, ObservableObject {
     private let captureSession = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "sessionQueue")
     private let context = CIContext()
+    private let isPreview: Bool
     
-    override init() {
+    init(isPreview: Bool = false) {
+        self.isPreview = isPreview
         super.init()
+        
+        // Skip camera setup in previews
+        guard !isPreview else { return }
+        
         checkPermission()
         sessionQueue.async { [unowned self] in
             self.setupCaptureSession()
@@ -25,6 +31,8 @@ class FrameHandler: NSObject, ObservableObject {
     }
     
     func checkPermission() {
+        guard !isPreview else { return }
+        
         switch AVCaptureDevice.authorizationStatus(for: .video) {
             case .authorized:
                 permissionGranted = true
@@ -38,12 +46,16 @@ class FrameHandler: NSObject, ObservableObject {
     }
     
     func requestPermission() {
+        guard !isPreview else { return }
+        
         AVCaptureDevice.requestAccess(for: .video) { [unowned self] granted in
             self.permissionGranted = granted
         }
     }
     
     func setupCaptureSession() {
+        guard !isPreview else { return }
+        
         let videoOutput = AVCaptureVideoDataOutput()
         
         guard permissionGranted else { return }
@@ -54,7 +66,7 @@ class FrameHandler: NSObject, ObservableObject {
         
         do {
             try videoDevice.lockForConfiguration()
-            videoDevice.videoZoomFactor = 1.0  // or try 1.0 to 1.2 if already zoomed in
+            videoDevice.videoZoomFactor = 1.0
             videoDevice.unlockForConfiguration()
         } catch {
             print("Failed to set zoom factor: \(error)")
@@ -64,11 +76,10 @@ class FrameHandler: NSObject, ObservableObject {
         captureSession.addOutput(videoOutput)
         videoOutput.connection(with: .video)?.videoRotationAngle = 90
     }
-    
 }
 
+// Keep the extension the same
 extension FrameHandler: AVCaptureVideoDataOutputSampleBufferDelegate {
-    
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard let cgImage = imageFromSampleBuffer(sampleBuffer: sampleBuffer) else { return }
         

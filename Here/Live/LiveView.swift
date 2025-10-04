@@ -296,6 +296,6 @@ struct User {
 
 
 #Preview {
-    @State var isCallActive = true
+    @Previewable @State var isCallActive = true
     return LiveView(isCallActive: .constant(true))
 }
