@@ -7,7 +7,7 @@
 import SwiftUI
 
 struct ProfileView: View {
-    @State private var username = "Bala"
+    @State private var username = "Yuumi"
     @State private var isEditingUsername = false
     @State private var showingImagePicker = false
     @State private var profileImage = "person.circle.fill"
