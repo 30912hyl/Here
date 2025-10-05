@@ -13,48 +13,39 @@ struct CategoryView: View {
     @State private var showingWaitingRoom = false
     
     let categories = [
-        CategoryItem(title: "Positive", color: Color.green.opacity(0.8), icon: "face.smiling"),
-        CategoryItem(title: "Negative", color: Color.red.opacity(0.8), icon: "face.dashed"),
-        CategoryItem(title: "Neutral", color: Color.gray.opacity(0.8), icon: "minus.circle"),
-        CategoryItem(title: "Random", color: Color.purple.opacity(0.8), icon: "shuffle")
+        CategoryItem(title: "Positive", color: Color.white, icon: "face.smiling"),
+        CategoryItem(title: "Negative", color: Color.white, icon: "face.dashed"),
+        CategoryItem(title: "Chilling", color: Color.white, icon: "cloud.fill")
     ]
     
     var body: some View {
         ZStack {
-            // Background gradient matching LiveView
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Color(red: 0.1, green: 0.1, blue: 0.15),
-                    Color(red: 0.05, green: 0.05, blue: 0.1)
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Pink background
+            Color(red: 243/255, green: 206/255, blue: 196/255)
+                .ignoresSafeArea()
             
             VStack(spacing: 30) {
                 // Title
-                VStack(spacing: 10) {
-                    Text("Choose Your Vibe")
-                        .font(.largeTitle)
+                VStack(spacing: 8) {
+                    Text("How are you feeling right now?")
+                        .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
                     
-                    Text("What kind of conversation are you in the mood for?")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
+                    Text("✨Let's find your mood twin!")
+                        .font(.callout)
+                        .foregroundColor(.white)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                 }
-                .padding(.top, 40)
+                .padding(.top, 30)
                 
                 Spacer()
                 
-                // Category grid
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 20),
-                    GridItem(.flexible(), spacing: 20)
-                ], spacing: 20) {
+                // Category list (vertical)
+                VStack(spacing: 20) {
                     ForEach(categories, id: \.title) { category in
                         CategoryButton(
                             category: category,
@@ -114,27 +105,42 @@ struct CategoryButton: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 15) {
+            HStack(spacing: 20) {
                 // Icon
                 Image(systemName: category.icon)
-                    .font(.system(size: 40, weight: .medium))
-                    .foregroundColor(.white)
+                    .font(.system(size: 35, weight: .medium))
+                    .foregroundColor(.black.opacity(0.7))
+                    .frame(width: 50)
                 
                 // Title
                 Text(category.title)
                     .font(.title2)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                    .foregroundColor(.black.opacity(0.8))
+                
+                Spacer()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .frame(height: 140)
+            .padding(.horizontal, 25)
+            .frame(maxWidth: .infinity)
+            .frame(height: 80)
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(category.color)
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.9),
+                                Color.white.opacity(0.7),
+                                Color.white.opacity(0.85)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(isSelected ? Color.white : Color.clear, lineWidth: 3)
+                            .stroke(isSelected ? Color.black.opacity(0.3) : Color.clear, lineWidth: 3)
                     )
+                    .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
             )
             .scaleEffect(isSelected ? 0.95 : 1.0)
             .animation(.easeInOut(duration: 0.1), value: isSelected)
