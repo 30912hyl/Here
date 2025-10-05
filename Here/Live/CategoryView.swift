@@ -9,6 +9,7 @@ import SwiftUI
 
 struct CategoryView: View {
     @Binding var isCallActive: Bool
+    @EnvironmentObject var agoraManager: AgoraAudioManager
     @State private var selectedCategory: String? = nil
     @State private var showingWaitingRoom = false
     
@@ -82,6 +83,7 @@ struct CategoryView: View {
                     isCallActive: $isCallActive,
                     showingWaitingRoom: $showingWaitingRoom
                 )
+                .environmentObject(agoraManager)
             }
         }
         //.toolbar(.hidden, for: .tabBar) // Hide tab bar on categories screen

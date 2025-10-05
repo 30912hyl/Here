@@ -13,7 +13,7 @@ import AVFoundation
 class AgoraAudioManager: NSObject, ObservableObject {
     let appId = "5599d5af7f7d456ca3536a9f05aac71d"
     let channelName = "sad"
-    let token = "007eJxTYGC82bV2736Fg1Xd/Y0NgjMORfIoPBf48+eAd21luYSKIrcCg6mppWWKaWKaeZp5iompWXKisamxWaJlmoFpYmKyuWGKTOymjIZARoY9JacYGRkgEMRnZihOTGFgAAAEXB5y"
+    let token = "007eJxTYAhf8dZ5Gdvf0swza3bJ3HzXl5hfZi3V/VPVLr3t8M0YnSsKDKamlpYppolp5mnmKSamZsmJxqbGZomWaQamiYnJ5oYp1148zGgIZGS4nvOFhZEBAkF8ZobixBQGBgDHfiIk"
     
     var agoraKit: AgoraRtcEngineKit!
     

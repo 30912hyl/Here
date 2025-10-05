@@ -11,14 +11,14 @@ struct WaitingRoomView: View {
     let selectedCategory: String
     @Binding var isCallActive: Bool
     @Binding var showingWaitingRoom: Bool
-    @StateObject private var agoraManager = AgoraAudioManager()
+    @EnvironmentObject var agoraManager: AgoraAudioManager
     @State private var estimatedWaitTime = "2-3 min"
     @State private var connectionStatus: ConnectionStatus = .searching
     @State private var username = "Bala"
     @State private var rotationAngle: Double = 0
     //temporary testing
     @State private var autoPassTimer: Timer?
-    @State private var timeRemaining = 10
+    @State private var timeRemaining = 5
     
     enum ConnectionStatus {
         case searching
@@ -175,7 +175,9 @@ struct WaitingRoomView: View {
             startAutoPassTimer()
         }
         .onDisappear {
-            agoraManager.leaveChannel()
+            if connectionStatus == .searching {
+                agoraManager.leaveChannel()
+            }
             //temporary testing
             stopAutoPassTimer()
         }
