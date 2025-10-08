@@ -257,4 +257,5 @@ struct User {
 #Preview {
     @Previewable @State var isCallActive = true
     return LiveView(isCallActive: .constant(true))
+        .environmentObject(AgoraAudioManager())
 }
