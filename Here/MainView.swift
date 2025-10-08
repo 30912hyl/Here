@@ -25,12 +25,14 @@ struct MessageView: View {
 }
 
 struct MainView: View {
+    @StateObject private var agoraManager = AgoraAudioManager()
     @State private var cameraStarted = false
     @State private var selectedTab = 0
     
     var body: some View {
         TabView(selection: $selectedTab) {
             CategoryView(isCallActive: $cameraStarted)
+                .environmentObject(agoraManager)
                 .tabItem {
                     Label("Live", systemImage: "video.circle")
                 }
@@ -56,6 +58,7 @@ struct MainView: View {
         }
         .fullScreenCover(isPresented: $cameraStarted) {
             LiveView(isCallActive: $cameraStarted)
+                .environmentObject(agoraManager)
         }
         .onChange(of: selectedTab) { oldTab, newTab in
             if newTab != 0 {
