@@ -9,7 +9,7 @@ import SwiftUI
 
 struct LiveView: View {
     @Binding var isCallActive: Bool
-    @StateObject private var agoraManager = AgoraAudioManager()
+    @EnvironmentObject var agoraManager: AgoraAudioManager
     @State private var callDuration: TimeInterval = 0
     @State private var timer: Timer?
     @State private var showingCategories = false
