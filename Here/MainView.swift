@@ -25,14 +25,9 @@ struct MessageView: View {
 }
 
 struct MainView: View {
-    @StateObject private var model = FrameHandler()
     @StateObject private var agoraManager = AgoraAudioManager()
     @State private var cameraStarted = false
     @State private var selectedTab = 0
-    
-    init(isPreview: Bool = false) {
-            _model = StateObject(wrappedValue: FrameHandler(isPreview: isPreview))
-        }
     
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -75,7 +70,7 @@ struct MainView: View {
 }
 
 #Preview {
-    MainView(isPreview: true)
+    MainView()
 }
 
 
