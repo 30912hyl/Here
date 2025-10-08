@@ -13,89 +13,97 @@ struct LiveView: View {
     @State private var callDuration: TimeInterval = 0
     @State private var timer: Timer?
     @State private var showingCategories = false
-    @State private var username = "Bala" // This should come from your profile data
-
-    // Mock user data - replace with actual user data
+    @State private var username = "Bala"
 
     var currentUser: User {
-        User(name: username, profileImage: "person.circle.fill", themeColor: Color.purple.opacity(0.8))
+        User(name: username, profileImage: "person.circle.fill", themeColor: Color.white)
     }
 
     var otherUser: User {
-        User(name: agoraManager.remoteUsername, profileImage: "person.circle.fill", themeColor: Color.red.opacity(0.8))
+        User(name: agoraManager.remoteUsername, profileImage: "person.circle.fill", themeColor: Color.white)
     }
     
     var body: some View {
         NavigationStack {
             GeometryReader { geometry in
                 ZStack {
-                    // Background gradient
+                    // Static pink gradient background
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            Color(red: 0.1, green: 0.1, blue: 0.15),
-                            Color(red: 0.05, green: 0.05, blue: 0.1)
+                            Color(red: 0.95, green: 0.81, blue: 0.77),  // #F3CEC4
+                            Color.white
                         ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                        startPoint: .top,
+                        endPoint: .bottom
                     )
                     .ignoresSafeArea()
                     
                     if agoraManager.isCallActive {
-                        VStack(spacing: 10) {
-                            // Connection status
-                            HStack {
-                                Circle()
-                                    .fill(agoraManager.isConnected ?
-                                          (agoraManager.remoteUserJoined ? Color.green : Color.orange) :
-                                            
-                                          Color.red)
-                                    .frame(width: 8, height: 8)
-                                Text(agoraManager.statusText)
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
+                        VStack(spacing: 20) {
+                            Spacer()
+                            
+                            // Other user profile
+                            VStack(spacing: 0) {
+                                ZStack {
+                                    // Speaking indicator glow
+                                    if agoraManager.remoteUserJoined {
+                                        Circle()
+                                            .fill(
+                                                RadialGradient(
+                                                    gradient: Gradient(colors: [
+                                                        Color(red: 0.95, green: 0.75, blue: 0.85).opacity(0.6),
+                                                        Color(red: 0.95, green: 0.75, blue: 0.85).opacity(0.3),
+                                                        Color.clear
+                                                    ]),
+                                                    center: .center,
+                                                    startRadius: 60,
+                                                    endRadius: 100
+                                                )
+                                            )
+                                            .frame(width: 200, height: 200)
+                                            .blur(radius: 20)
+                                            .scaleEffect(agoraManager.remoteUserJoined ? 1.05 : 1.0)
+                                            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: agoraManager.remoteUserJoined)
+                                    }
+                                    
+                                    // Profile image
+                                    Circle()
+                                        .fill(Color.white)
+                                        .frame(width: 130, height: 130)
+                                        .shadow(color: Color(red: 0.95, green: 0.75, blue: 0.85).opacity(0.3), radius: 20, x: 0, y: 10)
+                                    
+                                    Image(systemName: otherUser.profileImage)
+                                        .font(.system(size: 80, weight: .light))
+                                        .foregroundColor(Color(red: 0.85, green: 0.65, blue: 0.75))
+                                }
                             }
-                            .padding(.top, 5)
                             
-                            // Call duration
-                            Text(formatDuration(callDuration))
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            
-                            // Other user profile (top)
-                            LiveUserView(
-                                user: otherUser,
-                                profileSize: 100,
-                                posX: 0,
-                                posY: 30,
-                                isCurrentUser: false,
-                                isSpeaking: agoraManager.remoteUserJoined
-                            )
-                            
-                            Text(agoraManager.remoteUserJoined ?
-                                 agoraManager.remoteUsername:
-                                 "Test_User")
-                                .font(.title2)
-                                .fontWeight(.medium)
-                                .foregroundColor(.white)
-                                .padding(.top, 10)
-                            
-                            Spacer().frame(height: 20)
-                            
-                            // Current user profile (bottom)
-                            LiveUserView(
-                                user: currentUser,
-                                profileSize: 100,
-                                posX: 0,
-                                posY: 30,
-                                isCurrentUser: true,
-                                isSpeaking: !agoraManager.isMuted && agoraManager.isConnected
-                            )
-                            
-                            Text("You (\(username))")
-                                .font(.title3)
-                                .fontWeight(.medium)
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding(.top, 10)
+                            VStack(spacing: 8) {
+                                Text(agoraManager.remoteUserJoined ?
+                                     agoraManager.remoteUsername:
+                                     "等待连接中...")
+                                    .font(.title)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(Color(red: 0.5, green: 0.4, blue: 0.45))
+                                
+                                // Connection status
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(agoraManager.isConnected ?
+                                              (agoraManager.remoteUserJoined ? Color(red: 0.9, green: 0.6, blue: 0.7) : Color(red: 1.0, green: 0.8, blue: 0.85)) :
+                                              Color(red: 0.95, green: 0.75, blue: 0.8))
+                                        .frame(width: 8, height: 8)
+                                    Text(agoraManager.statusText)
+                                        .font(.subheadline)
+                                        .foregroundColor(Color(red: 0.6, green: 0.5, blue: 0.55))
+                                }
+                                
+                                // Call duration
+                                Text(formatDuration(callDuration))
+                                    .font(.title3)
+                                    .foregroundColor(Color(red: 0.7, green: 0.6, blue: 0.65))
+                                    .padding(.top, 4)
+                            }
                             
                             Spacer()
                             
@@ -105,7 +113,7 @@ struct LiveView: View {
                                 AudioControlButton(
                                     systemImage: agoraManager.isMuted ? "mic.slash.fill" : "mic.fill",
                                     isActive: !agoraManager.isMuted,
-                                    backgroundColor: agoraManager.isMuted ? .red : .gray.opacity(0.3)
+                                    backgroundColor: agoraManager.isMuted ? Color(red: 0.95, green: 0.75, blue: 0.8) : Color(red: 0.9, green: 0.9, blue: 0.92)
                                 ) {
                                     agoraManager.toggleMute()
                                 }
@@ -114,7 +122,7 @@ struct LiveView: View {
                                 AudioControlButton(
                                     systemImage: "phone.down.fill",
                                     isActive: false,
-                                    backgroundColor: .red,
+                                    backgroundColor: Color(red: 0.95, green: 0.75, blue: 0.8),
                                     size: 60
                                 ) {
                                     endCall()
@@ -124,7 +132,7 @@ struct LiveView: View {
                                 AudioControlButton(
                                     systemImage: agoraManager.isSpeakerOn ? "speaker.wave.3.fill" : "speaker.wave.1.fill",
                                     isActive: agoraManager.isSpeakerOn,
-                                    backgroundColor: agoraManager.isSpeakerOn ? .blue : .gray.opacity(0.3)
+                                    backgroundColor: agoraManager.isSpeakerOn ? Color(red: 0.9, green: 0.6, blue: 0.7) : Color(red: 0.9, green: 0.9, blue: 0.92)
                                 ) {
                                     agoraManager.toggleSpeaker()
                                 }
@@ -143,8 +151,6 @@ struct LiveView: View {
                 if isCallActive && !agoraManager.isCallActive {
                     startNewCall()
                 }
-                
-                // Load username from UserDefaults or ProfileManager
                 loadUsername()
             }
             .onDisappear {
@@ -159,7 +165,6 @@ struct LiveView: View {
                     agoraManager.leaveChannel()
                     stopCallTimer()
                 } else if newValue && agoraManager.isCallActive && agoraManager.inWaitingRoom {
-                    // Transition from waiting room to live call
                     agoraManager.transitionToLiveCall()
                     startCallTimer()
                 }
@@ -172,9 +177,7 @@ struct LiveView: View {
         }
     }
     
-    
     private func loadUsername() {
-        // Load username from UserDefaults (or your preferred storage method)
         if let savedUsername = UserDefaults.standard.string(forKey: "username"), !savedUsername.isEmpty {
             username = savedUsername
         }
@@ -202,7 +205,6 @@ struct LiveView: View {
         agoraManager.leaveChannel()
         stopCallTimer()
         callDuration = 0
-        // Add your end call logic here
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             showingCategories = true
         }
@@ -214,49 +216,6 @@ struct LiveView: View {
         return String(format: "%02d:%02d", minutes, seconds)
     }
 }
-
-struct LiveUserView: View {
-    let user: User
-    let profileSize: CGFloat // Profile picture size
-    let posX: CGFloat // X position offset for entire box from center
-    let posY: CGFloat // Y position offset for entire box from center
-    let isCurrentUser: Bool
-    let isSpeaking: Bool
-    
-    private let size: CGFloat = 100 // Fixed rectangle size
-    
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Background box with adjustable position
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(user.themeColor)
-                    .frame(width: geometry.size.width+20, height: size + 200)
-                    .position(x: geometry.size.width / 2 + posX, y: geometry.size.height / 2 + posY)
-                
-                // Speaking indicator border
-                if isSpeaking {
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.green, lineWidth: 3)
-                        .frame(width: geometry.size.width+25, height: size + 205)
-                        .position(x: geometry.size.width / 2 + posX, y: geometry.size.height / 2 + posY)
-                        .scaleEffect(isSpeaking ? 1.02 : 1.0)
-                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isSpeaking)
-                }
-                
-                // Profile image centered in the box
-                Image(systemName: user.profileImage)
-                    .font(.system(size: profileSize, weight: .medium))
-                    .foregroundColor(.white)
-                    .frame(width: profileSize + 10, height: profileSize + 10)
-                    .clipShape(Circle())
-                    .position(x: geometry.size.width / 2 + posX, y: geometry.size.height / 2 + posY)
-            }
-        }
-        .frame(height: size + 140) // Match rectangle height for proper spacing
-    }
-}
-
 
 struct AudioControlButton: View {
     let systemImage: String
@@ -274,6 +233,7 @@ struct AudioControlButton: View {
                 .background(
                     Circle()
                         .fill(backgroundColor)
+                        .shadow(color: backgroundColor.opacity(0.4), radius: 8, x: 0, y: 4)
                 )
                 .scaleEffect(isActive ? 1.0 : 0.95)
                 .animation(.easeInOut(duration: 0.1), value: isActive)
@@ -293,7 +253,6 @@ struct User {
         self.themeColor = themeColor
     }
 }
-
 
 #Preview {
     @Previewable @State var isCallActive = true
