@@ -147,4 +147,5 @@ struct CategoryButton: View {
 
 #Preview {
     CategoryView(isCallActive: .constant(false))
+        .environmentObject(AgoraAudioManager())
 }

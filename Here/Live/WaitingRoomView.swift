@@ -346,4 +346,5 @@ struct WaitingRoomView: View {
         isCallActive: .constant(false),
         showingWaitingRoom: .constant(true)
     )
+    .environmentObject(AgoraAudioManager())
 }

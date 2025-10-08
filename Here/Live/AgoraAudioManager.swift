@@ -13,7 +13,7 @@ import AVFoundation
 class AgoraAudioManager: NSObject, ObservableObject {
     let appId = "5599d5af7f7d456ca3536a9f05aac71d"
     let channelName = "sad"
-    let token = "007eJxTYAhf8dZ5Gdvf0swza3bJ3HzXl5hfZi3V/VPVLr3t8M0YnSsKDKamlpYppolp5mnmKSamZsmJxqbGZomWaQamiYnJ5oYp1148zGgIZGS4nvOFhZEBAkF8ZobixBQGBgDHfiIk"
+    let token = "007eJxTYChSeuAjqfiWrTRiRsGSGKO9fKYL62J2Mj3edXfHnCnty44rMJiaWlqmmCammaeZp5iYmiUnGpsamyVaphmYJiYmmxumJP5/mtEQyMgg+piLlZEBAkF8ZobixBQGBgAXyB9W"
     
     var agoraKit: AgoraRtcEngineKit!
     
@@ -157,6 +157,8 @@ class AgoraAudioManager: NSObject, ObservableObject {
 }
 
 extension AgoraAudioManager: AgoraRtcEngineDelegate {
+    
+    // Handle when user joins channel
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinChannel channel: String, withUid uid: UInt, elapsed: Int) {
         DispatchQueue.main.async {
             self.isConnected = true
@@ -170,6 +172,7 @@ extension AgoraAudioManager: AgoraRtcEngineDelegate {
         }
     }
     
+    // Handle when user2 joins channel
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinedOfUid uid: UInt, elapsed: Int) {
         DispatchQueue.main.async {
             // If this is the first remote user and we're in waiting room
@@ -196,6 +199,7 @@ extension AgoraAudioManager: AgoraRtcEngineDelegate {
         }
     }
     
+    // Handle when user2 leaves channel
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOfflineOfUid uid: UInt, reason: AgoraUserOfflineReason) {
         DispatchQueue.main.async {
             print("User \(uid) left: Reason -> \(reason)")
@@ -220,10 +224,18 @@ extension AgoraAudioManager: AgoraRtcEngineDelegate {
         }
     }
     
+    // Handle any error occurences
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOccurError errorCode: AgoraErrorCode) {
         DispatchQueue.main.async {
-            self.statusText = "Connection error occurred"
-            print("Agora error occurred: \(errorCode.rawValue)")
+            if errorCode.rawValue == 109 || errorCode.rawValue == 110 {
+                // Token expired error
+                self.statusText = "Token invalid/expired - Check README"
+                print("Agora error \(errorCode.rawValue): \(self.statusText)")
+                self.leaveChannel()
+            } else {
+                self.statusText = "Connection error occurred"
+                print("Agora error \(errorCode.rawValue): \(self.statusText)")
+            }
         }
     }
     
