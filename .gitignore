@@ -1,0 +1,6 @@
+# macOS
+.DS_Store
+
+# XCode user data
+xcuserdata/
+*.xcuserstate
