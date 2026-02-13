@@ -5,62 +5,101 @@ struct FeedView: View {
     let onStartChat: (Post) -> Void
 
     var body: some View {
-        NavigationStack {
-            if posts.isEmpty {
-                VStack(spacing: 12) {
-                    Text("No posts in the last 24 hours.")
-                        .font(.headline)
-                    Text("Tap ❤️ to share how you feel.")
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-                .navigationTitle("Posts")
-            } else {
-                List(posts) { post in
-                    VStack(alignment: .leading, spacing: 10) {
-                        // Title
-                        Text(post.title)
-                            .font(.headline)
-                            .padding(.top, 6)
-
-                        // Body text
-                        if !post.bodyText.isEmpty {
-                            Text(post.bodyText)
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        // Images
-                        if !post.images.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(post.images.indices, id: \.self) { idx in
-                                        Image(uiImage: post.images[idx])
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 140, height: 140)
-                                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    }
-                                }
-                            }
-                        }
-
-                        Button("Private chat") {
-                            onStartChat(post)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .padding(.bottom, 6)
+        if posts.isEmpty {
+            VStack(spacing: 12) {
+                Text("No posts in the last 24 hours.")
+                    .font(.headline)
+                Text("Tap ❤️ to share how you feel.")
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+        } else {
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 0) {
+                    ForEach(posts) { post in
+                        SinglePostView(post: post, onStartChat: onStartChat)
+                            .containerRelativeFrame(.vertical)
                     }
                 }
-                .navigationTitle("Posts")
             }
+            .scrollTargetBehavior(.paging)
+            .ignoresSafeArea()
         }
+    }
+}
+
+struct SinglePostView: View {
+    let post: Post
+    let onStartChat: (Post) -> Void
+
+    var body: some View {
+        ZStack {
+            // Background: first image fills the screen, or a gradient fallback
+            if let firstImage = post.images.first {
+                Image(uiImage: firstImage)
+                    .resizable()
+                    .scaledToFill()
+                    .overlay(Color.black.opacity(0.4))
+            } else {
+                LinearGradient(
+                    colors: [.black, Color(.darkGray)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+
+            // Content centered
+            VStack(alignment: .leading, spacing: 10) {
+                Text(post.title)
+                    .font(.title2)
+                    .bold()
+                    .foregroundStyle(.white)
+
+                if !post.bodyText.isEmpty {
+                    Text(post.bodyText)
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(4)
+                }
+
+                // Extra images (if more than 1)
+                if post.images.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(post.images.dropFirst().indices, id: \.self) { idx in
+                                Image(uiImage: post.images[idx])
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 80, height: 80)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                        }
+                    }
+                }
+
+                Button {
+                    onStartChat(post)
+                } label: {
+                    Text("Private chat")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.white.opacity(0.2))
+            }
+            .padding(.horizontal, 20)
+        }
+        .clipped()
     }
 }
 
 #Preview {
     FeedView(
-        posts: [Post(title: "Sample", bodyText: "A sample post with text only")],
+        posts: [
+            Post(title: "Feeling grateful", bodyText: "Had a wonderful day today and wanted to share the vibes."),
+            Post(title: "Can't sleep", bodyText: "Anyone else up late thinking about everything?"),
+            Post(title: "New here", bodyText: "Just downloaded this app. Excited to connect.")
+        ],
         onStartChat: { _ in }
     )
 }
