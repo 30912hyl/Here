@@ -3,22 +3,35 @@ import SwiftUI
 struct FeedView: View {
     let posts: [Post]
     let onStartChat: (Post) -> Void
+    let onLike: (UUID) -> Void
 
     var body: some View {
         if posts.isEmpty {
-            VStack(spacing: 12) {
-                Text("No posts in the last 24 hours.")
-                    .font(.headline)
-                Text("Tap ❤️ to share how you feel.")
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 16) {
+                Image(systemName: "heart")
+                    .font(.system(size: 40, weight: .thin))
+                    .foregroundStyle(LinearGradient(
+                        colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                Text("No posts yet.")
+                    .font(.system(size: 16, weight: .light))
+                    .foregroundColor(Color(hex: "#C4A55A"))
+                Text("Be the first to share.")
+                    .font(.system(size: 13, weight: .light))
+                    .foregroundColor(Color(hex: "#D4C5A0"))
             }
-            .padding()
         } else {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 0) {
                     ForEach(posts) { post in
-                        SinglePostView(post: post, onStartChat: onStartChat)
-                            .containerRelativeFrame(.vertical)
+                        SinglePostView(
+                            post: post,
+                            onStartChat: onStartChat,
+                            onLike: onLike
+                        )
+                        .containerRelativeFrame(.vertical)
                     }
                 }
             }
@@ -28,68 +41,148 @@ struct FeedView: View {
     }
 }
 
+// MARK: - Single Post
 struct SinglePostView: View {
     let post: Post
     let onStartChat: (Post) -> Void
+    let onLike: (UUID) -> Void
+
+    @State private var liked = false
+    @State private var likeScale = 1.0
+    @State private var showReport = false
+
+    var goldGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 
     var body: some View {
         ZStack {
-            // Background: first image fills the screen, or a gradient fallback
+            Color.white.ignoresSafeArea()
+
+            // Background image if exists
             if let firstImage = post.images.first {
                 Image(uiImage: firstImage)
                     .resizable()
                     .scaledToFill()
-                    .overlay(Color.black.opacity(0.4))
-            } else {
-                LinearGradient(
-                    colors: [.black, Color(.darkGray)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                    .overlay(Color.white.opacity(0.85))
+                    .clipped()
             }
 
-            // Content centered
-            VStack(alignment: .leading, spacing: 10) {
-                Text(post.title)
-                    .font(.title2)
-                    .bold()
-                    .foregroundStyle(.white)
+            VStack(spacing: 0) {
+                // Scrollable content area - centered
+                GeometryReader { geo in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(post.title)
+                                .font(.system(size: 24, weight: .light))
+                                .foregroundColor(.black)
 
-                if !post.bodyText.isEmpty {
-                    Text(post.bodyText)
-                        .font(.body)
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(4)
-                }
+                            if !post.bodyText.isEmpty {
+                                Text(post.bodyText)
+                                    .font(.system(size: 16, weight: .light))
+                                    .foregroundColor(Color(hex: "#5C5C5C"))
+                                    .lineSpacing(6)
+                            }
 
-                // Extra images (if more than 1)
-                if post.images.count > 1 {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(post.images.dropFirst().indices, id: \.self) { idx in
-                                Image(uiImage: post.images[idx])
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 80, height: 80)
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            // Extra images
+                            if post.images.count > 1 {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(post.images.dropFirst().indices, id: \.self) { idx in
+                                            Image(uiImage: post.images[idx])
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 80, height: 80)
+                                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        }
+                                    }
+                                }
                             }
                         }
+                        .padding(.horizontal, 28)
+                        .frame(minHeight: geo.size.height, alignment: .center)
                     }
                 }
 
-                Button {
-                    onStartChat(post)
-                } label: {
-                    Text("Private chat")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
+                // Action buttons — always pinned at bottom
+                HStack(spacing: 20) {
+                    // Like button
+                    Button {
+                        guard !liked else { return }
+                        liked = true
+                        onLike(post.id)
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
+                            likeScale = 1.4
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                likeScale = 1.0
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: liked ? "heart.fill" : "heart")
+                                .font(.system(size: 20, weight: .light))
+                                .foregroundStyle(
+                                    liked
+                                    ? goldGradient
+                                    : LinearGradient(colors: [Color(hex: "#D4C5A0")], startPoint: .top, endPoint: .bottom)
+                                )
+                                .scaleEffect(likeScale)
+                            Text("\(post.likeCount + (liked ? 1 : 0))")
+                                .font(.system(size: 13, weight: .light))
+                                .foregroundColor(liked ? Color(hex: "#C9A84C") : Color(hex: "#D4C5A0"))
+                        }
+                    }
+
+                    // Chat button
+                    Button {
+                        onStartChat(post)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bubble.left")
+                                .font(.system(size: 14, weight: .light))
+                            Text("Chat privately")
+                                .font(.system(size: 13, weight: .light))
+                                .tracking(0.3)
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 9)
+                        .background(goldGradient)
+                        .clipShape(Capsule())
+                    }
+
+                    Spacer()
+
+                    // Report menu
+                    Menu {
+                        Button(role: .destructive) {
+                            showReport = true
+                        } label: {
+                            Label("Report Post", systemImage: "flag")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 18, weight: .light))
+                            .foregroundColor(Color(hex: "#D4C5A0"))
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.white.opacity(0.2))
+                .padding(.horizontal, 28)
+                .padding(.vertical, 20)
+                .padding(.bottom, 80) // Clear the tab bar
             }
-            .padding(.horizontal, 20)
         }
-        .clipped()
+        .alert("Report this post?", isPresented: $showReport) {
+            Button("Report", role: .destructive) { }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Thank you for helping keep this space safe.")
+        }
     }
 }
 
@@ -100,6 +193,7 @@ struct SinglePostView: View {
             Post(title: "Can't sleep", bodyText: "Anyone else up late thinking about everything?"),
             Post(title: "New here", bodyText: "Just downloaded this app. Excited to connect.")
         ],
-        onStartChat: { _ in }
+        onStartChat: { _ in },
+        onLike: { _ in }
     )
 }
