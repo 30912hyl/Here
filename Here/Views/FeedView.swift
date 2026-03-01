@@ -35,17 +35,24 @@ struct SinglePostView: View {
     var body: some View {
         ZStack {
             // Background: first image fills the screen, or a gradient fallback
-            if let firstImage = post.images.first {
-                Image(uiImage: firstImage)
-                    .resizable()
-                    .scaledToFill()
-                    .overlay(Color.black.opacity(0.4))
+            if let firstURL = post.imageURLs.first, let url = URL(string: firstURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .overlay(Color.black.opacity(0.4))
+                    case .failure:
+                        gradientFallback
+                    case .empty:
+                        gradientFallback.overlay(ProgressView().tint(.white))
+                    @unknown default:
+                        gradientFallback
+                    }
+                }
             } else {
-                LinearGradient(
-                    colors: [.black, Color(.darkGray)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                gradientFallback
             }
 
             // Content centered
@@ -62,16 +69,20 @@ struct SinglePostView: View {
                         .lineLimit(4)
                 }
 
-                // Extra images (if more than 1)
-                if post.images.count > 1 {
+                // Extra image thumbnails
+                if post.imageURLs.count > 1 {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(post.images.dropFirst().indices, id: \.self) { idx in
-                                Image(uiImage: post.images[idx])
-                                    .resizable()
-                                    .scaledToFill()
+                            ForEach(post.imageURLs.dropFirst(), id: \.self) { urlString in
+                                if let url = URL(string: urlString) {
+                                    AsyncImage(url: url) { image in
+                                        image.resizable().scaledToFill()
+                                    } placeholder: {
+                                        Color.gray.opacity(0.3)
+                                    }
                                     .frame(width: 80, height: 80)
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                                }
                             }
                         }
                     }
@@ -91,15 +102,16 @@ struct SinglePostView: View {
         }
         .clipped()
     }
+    
+    private var gradientFallback: some View {
+        LinearGradient(
+            colors: [.black, Color(.darkGray)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
 }
 
 #Preview {
-    FeedView(
-        posts: [
-            Post(title: "Feeling grateful", bodyText: "Had a wonderful day today and wanted to share the vibes."),
-            Post(title: "Can't sleep", bodyText: "Anyone else up late thinking about everything?"),
-            Post(title: "New here", bodyText: "Just downloaded this app. Excited to connect.")
-        ],
-        onStartChat: { _ in }
-    )
+    FeedView(posts: [], onStartChat: { _ in })
 }

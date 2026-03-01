@@ -7,34 +7,57 @@
 import SwiftUI
 
 struct ChatDetailView: View {
-    @Binding var thread: ChatThread
-    @State private var input: String = ""
+    let thread: ChatThread
+    @ObservedObject var app: AppState
+
+    @State private var input = ""
     @State private var showEndedActions = false
 
-    let isFrozenNow: (ChatThread) -> Bool
-    let onSend: (UUID, String) -> Void
-    let onManualFreeze: (UUID) -> Void
-
-    private var now: Date { Date() }
-    private var expired: Bool { now >= thread.expiresAt }
-    private var frozen: Bool { isFrozenNow(thread) }
+    private var uid: String { app.uid }
+    private var threadId: String { thread.id ?? "" }
+    private var messages: [ChatMessage] { app.messages[threadId] ?? [] }
+    private var expired: Bool { thread.isExpired() }
+    private var frozen: Bool { thread.isFrozen() }
+    private var myChoice: ContinueChoice { thread.myContinueChoice(uid: uid) }
+    private var otherChoice: ContinueChoice { thread.otherContinueChoice(uid: uid) }
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    ForEach(thread.messages) { m in
-                        HStack {
-                            if m.isMe { Spacer() }
-                            Text(m.text)
-                                .padding(10)
-                                .background(Color(.secondarySystemBackground))
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                            if !m.isMe { Spacer() }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Spacer()
+                        .containerRelativeFrame(.vertical)
+
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(messages) { m in
+                            HStack {
+                                if m.isMe(uid: uid) { Spacer() }
+                                Text(m.text)
+                                    .padding(10)
+                                    .background(
+                                        m.senderUID == "system"
+                                            ? Color.yellow.opacity(0.15)
+                                            : Color(.secondarySystemBackground)
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .foregroundStyle(
+                                        m.senderUID == "system" ? .secondary : .primary
+                                    )
+                                if !m.isMe(uid: uid) { Spacer() }
+                            }
+                            .id(m.id)
+                        }
+                    }
+                    .padding()
+                }
+                .defaultScrollAnchor(.bottom)
+                .onChange(of: messages.count) {
+                    if let lastId = messages.last?.id {
+                        withAnimation {
+                            proxy.scrollTo(lastId, anchor: .bottom)
                         }
                     }
                 }
-                .padding()
             }
 
             Divider()
@@ -45,40 +68,13 @@ struct ChatDetailView: View {
                 frozenBottomArea
             }
         }
-        .navigationTitle(thread.title)
-        .onAppear {
-            maybeApplyExtensionIfReady()
-        }
-        .onChange(of: thread.myContinueChoice) {
-            maybeApplyExtensionIfReady()
-        }
-        .onChange(of: thread.otherContinueChoice) {
-            maybeApplyExtensionIfReady()
-        }
+        .navigationTitle(thread.postTitle)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Freeze") { onManualFreeze(thread.id) }
-            }
-
-            #if DEBUG
-            ToolbarItem(placement: .topBarLeading) {
-                Menu("Debug") {
-                    Button("Expire Now") {
-                        thread.expiresAt = Date().addingTimeInterval(-1)
-                    }
-                    Button("Other YES") {
-                        thread.otherContinueChoice = .yes
-                    }
-                    Button("Other NO") {
-                        thread.otherContinueChoice = .no
-                    }
-                    Button("Reset Continue Choices") {
-                        thread.myContinueChoice = .undecided
-                        thread.otherContinueChoice = .undecided
-                    }
+                Button("Freeze") {
+                    Task { await app.manualFreezeThread(threadId: threadId) }
                 }
             }
-            #endif
         }
         .alert("Conversation ended", isPresented: $showEndedActions) {
             Button("Report (placeholder)") { }
@@ -97,12 +93,12 @@ struct ChatDetailView: View {
                 .textFieldStyle(.roundedBorder)
 
             Button("Send") {
-                let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                onSend(thread.id, trimmed)
+                let text = input
                 input = ""
+                Task { await app.sendMessage(threadId: threadId, text: text) }
             }
             .buttonStyle(.borderedProminent)
+            .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding()
     }
@@ -114,20 +110,16 @@ struct ChatDetailView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .padding(.top, 6)
-            }
-
-            if expired {
+            } else if expired {
                 if thread.hasExtendedOnce {
                     Text("This conversation has ended.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
-                    Button("Options") {
-                        showEndedActions = true
-                    }
-                    .buttonStyle(.bordered)
+                    Button("Options") { showEndedActions = true }
+                        .buttonStyle(.bordered)
                 } else {
-                    switch thread.myContinueChoice {
+                    switch myChoice {
                     case .undecided:
                         Text("This chat is archived. Continue this conversation for one more day?")
                             .font(.footnote)
@@ -136,13 +128,17 @@ struct ChatDetailView: View {
 
                         HStack(spacing: 12) {
                             Button("No") {
-                                thread.myContinueChoice = .no
+                                Task {
+                                    await app.setContinueChoice(threadId: threadId, choice: .no)
+                                }
                                 showEndedActions = true
                             }
                             .buttonStyle(.bordered)
 
                             Button("Yes") {
-                                thread.myContinueChoice = .yes
+                                Task {
+                                    await app.setContinueChoice(threadId: threadId, choice: .yes)
+                                }
                             }
                             .buttonStyle(.borderedProminent)
                         }
@@ -167,10 +163,8 @@ struct ChatDetailView: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
 
-                        Button("Options") {
-                            showEndedActions = true
-                        }
-                        .buttonStyle(.bordered)
+                        Button("Options") { showEndedActions = true }
+                            .buttonStyle(.bordered)
                     }
                 }
             } else {
@@ -180,22 +174,5 @@ struct ChatDetailView: View {
             }
         }
         .padding()
-    }
-
-    // MARK: - Logic
-
-    private func maybeApplyExtensionIfReady() {
-        guard !thread.isManuallyFrozen else { return }
-        guard Date() >= thread.expiresAt else { return }
-        guard thread.hasExtendedOnce == false else { return }
-        guard thread.myContinueChoice == .yes && thread.otherContinueChoice == .yes else { return }
-
-        thread.expiresAt = Date().addingTimeInterval(AppState.chatTTL)
-        thread.hasExtendedOnce = true
-
-        thread.myContinueChoice = .undecided
-        thread.otherContinueChoice = .undecided
-
-        thread.messages.append(ChatMessage(text: "Conversation continued for 24 hours.", isMe: false))
     }
 }
