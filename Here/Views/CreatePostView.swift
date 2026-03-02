@@ -9,12 +9,13 @@ import PhotosUI
 
 struct CreatePostView: View {
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject var app: AppState
+    
     @State private var title = ""
     @State private var bodyText = ""
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var images: [UIImage] = []
-
-    let onPost: (Post) -> Void
+    @State private var isUploading = false
 
     private var isValid: Bool {
         let hasTitle = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -87,18 +88,17 @@ struct CreatePostView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(isUploading)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Post") {
-                        let post = Post(
-                            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                            bodyText: bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
-                            images: images
-                        )
-                        onPost(post)
-                        dismiss()
+                    if isUploading {
+                        ProgressView()
+                    } else {
+                        Button("Post") {
+                            Task { await submitPost() }
+                        }
+                        .disabled(!isValid)
                     }
-                    .disabled(!isValid)
                 }
             }
             .onChange(of: selectedItems) {
@@ -114,8 +114,19 @@ struct CreatePostView: View {
             }
         }
     }
+
+    private func submitPost() async {
+        isUploading = true
+        await app.addPost(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            bodyText: bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
+            images: images
+        )
+        isUploading = false
+        dismiss()
+    }
 }
 
 #Preview {
-    CreatePostView { _ in }
+    CreatePostView(app: AppState(authService: AuthService()))
 }
