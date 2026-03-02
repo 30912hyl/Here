@@ -25,9 +25,6 @@ struct ChatDetailView: View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    Spacer()
-                        .containerRelativeFrame(.vertical)
-
                     LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(messages) { m in
                             HStack {
