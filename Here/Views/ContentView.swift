@@ -1,16 +1,43 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var authService: AuthService
+    
     @State private var selectedTab: MainTab = .feed
     @State private var lastNonCreateTab: MainTab = .feed
     @State private var showCreateSheet = false
     @State private var heartBeating = false
 
-    @StateObject private var app = AppState()
+    @StateObject private var app = AppState(authService: AuthService())
 
     var body: some View {
-        let activePosts = app.activePosts()
+        Group {
+            if authService.isSignedIn {
+                mainTabView
+            } else {
+                ProgressView("Connecting...")
+            }
+        }
+        .onAppear {
+            print("ContentView appeared, isSignedIn: \(authService.isSignedIn)")
+            if authService.isSignedIn {
+                app.authService = authService
+                app.startListening()
+            }
+        }
+        .onChange(of: authService.isSignedIn) {
+            print("isSignedIn changed to: \(authService.isSignedIn)")
+            if authService.isSignedIn {
+                app.authService = authService
+                app.startListening()
+            }
+        }
+        .onDisappear {
+            app.stopListening()
+        }
+    }
 
+    private var mainTabView: some View {
         ZStack(alignment: .bottom) {
             Color.white.ignoresSafeArea()
 
@@ -19,13 +46,15 @@ struct ContentView: View {
                     .tag(MainTab.voice)
 
                 FeedView(
-                    posts: activePosts,
+                    posts: app.posts,
                     onStartChat: { post in
-                        _ = app.createThreadFromPost(post)
-                        selectedTab = .inbox
+                        Task {
+                            _ = await app.createThreadFromPost(post)
+                            selectedTab = .inbox
+                        }
                     },
                     onLike: { id in
-                        app.likePost(id: id)
+                        Task { await app.likePost(postId: id) }
                     }
                 )
                 .tag(MainTab.feed)
@@ -33,13 +62,8 @@ struct ContentView: View {
 
                 Color.clear.tag(MainTab.create)
 
-                InboxView(
-                    threads: $app.threads,
-                    isFrozenNow: { thread in app.isThreadFrozenNow(thread) },
-                    onSend: { id, text in app.sendMessage(threadId: id, text: text) },
-                    onManualFreeze: { id in app.manualFreezeThread(threadId: id) }
-                )
-                .tag(MainTab.inbox)
+                InboxView(app: app)
+                    .tag(MainTab.inbox)
 
                 ProfileView()
                     .tag(MainTab.profile)
@@ -98,8 +122,8 @@ struct ContentView: View {
             .padding(.bottom, 24)
             .background(.ultraThinMaterial)
         }
-        .sheet(isPresented: $showCreateSheet) { [app] in
-            CreatePostView { post in app.addPost(post) }
+        .sheet(isPresented: $showCreateSheet) {
+            CreatePostView(app: app)
                 .presentationCornerRadius(28)
         }
     }
@@ -188,4 +212,5 @@ extension Color {
 
 #Preview {
     ContentView()
+        .environmentObject(AuthService())
 }

@@ -1,17 +1,19 @@
 import SwiftUI
 
 struct ChatDetailView: View {
-    @Binding var thread: ChatThread
-    @State private var input: String = ""
+    let thread: ChatThread
+    @ObservedObject var app: AppState
+
+    @State private var input = ""
     @State private var showEndedActions = false
 
-    let isFrozenNow: (ChatThread) -> Bool
-    let onSend: (UUID, String) -> Void
-    let onManualFreeze: (UUID) -> Void
-
-    private var now: Date { Date() }
-    private var expired: Bool { now >= thread.expiresAt }
-    private var frozen: Bool { isFrozenNow(thread) }
+    private var uid: String { app.uid }
+    private var threadId: String { thread.id ?? "" }
+    private var messages: [ChatMessage] { app.messages[threadId] ?? [] }
+    private var expired: Bool { thread.isExpired() }
+    private var frozen: Bool { thread.isFrozen() }
+    private var myChoice: ContinueChoice { thread.myContinueChoice(uid: uid) }
+    private var otherChoice: ContinueChoice { thread.otherContinueChoice(uid: uid) }
 
     private var timeRemainingText: String {
         let remaining = thread.expiresAt.timeIntervalSince(Date())
@@ -37,17 +39,18 @@ struct ChatDetailView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 10) {
-                            ForEach(thread.messages) { m in
-                                MessageBubble(message: m)
+                            ForEach(messages) { m in
+                                MessageBubble(message: m, uid: uid)
                                     .id(m.id)
                             }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                     }
-                    .onChange(of: thread.messages.count) {
-                        if let last = thread.messages.last {
-                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                    .defaultScrollAnchor(.bottom)              
+                    .onChange(of: messages.count) {
+                        if let lastId = messages.last?.id {
+                            withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
                         }
                     }
                 }
@@ -64,7 +67,7 @@ struct ChatDetailView: View {
         .toolbar {
             // Nickname in gold as title
             ToolbarItem(placement: .principal) {
-                Text(thread.title)
+                Text(thread.postTitle)
                     .font(.system(size: 16, weight: .light))
                     .tracking(0.5)
                     .foregroundStyle(goldGradient)
@@ -80,14 +83,14 @@ struct ChatDetailView: View {
 
                     // End without reporting
                     Button(role: .destructive) {
-                        onManualFreeze(thread.id)
+                        Task { await app.manualFreezeThread(threadId: threadId) }
                     } label: {
                         Label("End Conversation", systemImage: "xmark.circle")
                     }
 
                     // Report and end
                     Button(role: .destructive) {
-                        onManualFreeze(thread.id)
+                        Task { await app.manualFreezeThread(threadId: threadId) }
                         showEndedActions = true
                     } label: {
                         Label("Report & End", systemImage: "flag")
@@ -106,9 +109,6 @@ struct ChatDetailView: View {
         } message: {
             Text("Thank you for helping keep this space safe.")
         }
-        .onAppear { maybeApplyExtensionIfReady() }
-        .onChange(of: thread.myContinueChoice) { maybeApplyExtensionIfReady() }
-        .onChange(of: thread.otherContinueChoice) { maybeApplyExtensionIfReady() }
     }
 
     // MARK: - Input Bar
@@ -125,11 +125,10 @@ struct ChatDetailView: View {
                         .stroke(Color(hex: "#E8E0CC"), lineWidth: 1)
                 )
 
-            Button {
-                let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                onSend(thread.id, trimmed)
+            Button("Send") {
+                let text = input
                 input = ""
+                Task { await app.sendMessage(threadId: threadId, text: text) }
             } label: {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 15, weight: .medium))
@@ -138,6 +137,8 @@ struct ChatDetailView: View {
                     .background(goldGradient)
                     .clipShape(Circle())
             }
+            //.buttonStyle(.borderedProminent)
+            .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -157,15 +158,13 @@ struct ChatDetailView: View {
                 Text("This conversation has ended.")
                     .font(.system(size: 13, weight: .light))
                     .foregroundColor(Color(hex: "#C4A55A"))
-            }
-
-            if expired {
+            } else if expired {
                 if thread.hasExtendedOnce {
                     Text("This conversation has ended.")
                         .font(.system(size: 13, weight: .light))
                         .foregroundColor(Color(hex: "#C4A55A"))
                 } else {
-                    switch thread.myContinueChoice {
+                    switch myChoice {
                     case .undecided:
                         Text("Continue this conversation for one more day?")
                             .font(.system(size: 13, weight: .light))
@@ -174,7 +173,9 @@ struct ChatDetailView: View {
 
                         HStack(spacing: 16) {
                             Button("No") {
-                                thread.myContinueChoice = .no
+                                Task {
+                                    await app.setContinueChoice(threadId: threadId, choice: .no)
+                                }
                                 showEndedActions = true
                             }
                             .font(.system(size: 14, weight: .light))
@@ -184,7 +185,9 @@ struct ChatDetailView: View {
                             .overlay(Capsule().stroke(Color(hex: "#E8E0CC"), lineWidth: 1))
 
                             Button("Yes") {
-                                thread.myContinueChoice = .yes
+                                Task {
+                                    await app.setContinueChoice(threadId: threadId, choice: .yes)
+                                }
                             }
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(.white)
@@ -216,40 +219,31 @@ struct ChatDetailView: View {
             alignment: .top
         )
     }
-
-    // MARK: - Extension Logic
-    private func maybeApplyExtensionIfReady() {
-        guard !thread.isManuallyFrozen else { return }
-        guard Date() >= thread.expiresAt else { return }
-        guard !thread.hasExtendedOnce else { return }
-        guard thread.myContinueChoice == .yes && thread.otherContinueChoice == .yes else { return }
-        thread.expiresAt = Date().addingTimeInterval(AppState.chatTTL)
-        thread.hasExtendedOnce = true
-        thread.myContinueChoice = .undecided
-        thread.otherContinueChoice = .undecided
-        thread.messages.append(ChatMessage(text: "Conversation continued for 48 hours.", isMe: false))
-    }
 }
 
 // MARK: - Message Bubble
 struct MessageBubble: View {
     let message: ChatMessage
+    let uid: String
+  
+    private var isMe: Bool { message.isMe(uid: uid) }
+    private var isSystem: Bool { message.senderUID == "system" }
 
     var body: some View {
         HStack {
-            if message.isMe { Spacer(minLength: 60) }
+            if isMe { Spacer(minLength: 60) }
             Text(message.text)
                 .font(.system(size: 15, weight: .light))
-                .foregroundColor(.black)
+                .foregroundColor(isSystem ? Color(hex: "#C4A55A") : .black)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Color.white)
+                .background(isSystem ? Color(hex: "#FBF7ED") : Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(Color(hex: "#E8E0CC"), lineWidth: 1)
                 )
-            if !message.isMe { Spacer(minLength: 60) }
+            if isMe { Spacer(minLength: 60) }
         }
     }
 }
@@ -257,18 +251,11 @@ struct MessageBubble: View {
 #Preview {
     NavigationStack {
         ChatDetailView(
-            thread: .constant(ChatThread(
-                title: "Wandering Soul",
-                messages: [
-                    ChatMessage(text: "hey, your post really resonated with me", isMe: false),
-                    ChatMessage(text: "thank you, I really needed to hear that", isMe: true),
-                    ChatMessage(text: "how are you feeling now?", isMe: false)
-                ],
-                ttlSeconds: AppState.chatTTL
-            )),
-            isFrozenNow: { _ in false },
-            onSend: { _, _ in },
-            onManualFreeze: { _ in }
+            thread: ChatThread(
+                postTitle: "Wandering Soul",
+                participants: ["me", "other"]
+            ),
+            app: AppState(authService: AuthService())
         )
     }
 }

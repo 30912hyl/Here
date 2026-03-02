@@ -2,68 +2,50 @@
 import SwiftUI
 
 struct InboxView: View {
-    @Binding var threads: [ChatThread]
-    let isFrozenNow: (ChatThread) -> Bool
-    let onSend: (UUID, String) -> Void
-    let onManualFreeze: (UUID) -> Void
+    @ObservedObject var app: AppState
 
-    var activeThreads: [ChatThread] { threads.filter { !isFrozenNow($0) } }
-    var endedThreads: [ChatThread] { threads.filter { isFrozenNow($0) } }
+    var activeThreads: [ChatThread] { app.threads.filter { !$0.isFrozen() } }
+    var endedThreads: [ChatThread] { app.threads.filter { $0.isFrozen() } }
 
     var body: some View {
-        List {
-            if threads.isEmpty {
-                Text("No conversations yet.")
-                    .foregroundStyle(Color(hex: "#D4C5A0"))
-                    .font(.system(size: 14, weight: .light))
-                    .listRowBackground(Color.white)
-            } else {
-                // Active
-                if !activeThreads.isEmpty {
-                    ForEach(activeThreads) { thread in
-                        NavigationLink {
-                            ChatDetailView(
-                                thread: binding(for: thread.id),
-                                isFrozenNow: isFrozenNow,
-                                onSend: onSend,
-                                onManualFreeze: onManualFreeze
-                            )
-                        } label: {
-                            ThreadCard(thread: thread, isEnded: false)
-                        }
+        NavigationStack {
+            List {
+                if app.threads.isEmpty {
+                    Text("No conversations yet.")
+                        .foregroundStyle(Color(hex: "#D4C5A0"))
+                        .font(.system(size: 14, weight: .light))
                         .listRowBackground(Color.white)
-                        .listRowSeparator(.hidden)
+                } else {
+                    if !activeThreads.isEmpty {
+                        ForEach(activeThreads) { thread in
+                            NavigationLink {
+                                ChatDetailView(thread: thread, app: app)
+                            } label: {
+                                ThreadCard(thread: thread, isEnded: false, app: app)
+                            }
+                            .listRowBackground(Color.white)
+                            .listRowSeparator(.hidden)
+                        }
                     }
-                }
 
-                // Ended
-                if !endedThreads.isEmpty {
-                    ForEach(endedThreads) { thread in
-                        NavigationLink {
-                            ChatDetailView(
-                                thread: binding(for: thread.id),
-                                isFrozenNow: isFrozenNow,
-                                onSend: onSend,
-                                onManualFreeze: onManualFreeze
-                            )
-                        } label: {
-                            ThreadCard(thread: thread, isEnded: true)
+                    // Ended
+                    if !endedThreads.isEmpty {
+                        ForEach(endedThreads) { thread in
+                            NavigationLink {
+                               ChatDetailView(thread: thread, app: app)
+                            } label: {
+                                ThreadCard(thread: thread, isEnded: true, app: app)
+                            }
+                            .listRowBackground(Color.white)
+                            .listRowSeparator(.hidden)
                         }
-                        .listRowBackground(Color.white)
-                        .listRowSeparator(.hidden)
                     }
-                }
+                } 
             }
-        }
-        .listStyle(.plain)
-        .background(Color.white)
-    }
-
-    private func binding(for id: UUID) -> Binding<ChatThread> {
-        guard let idx = threads.firstIndex(where: { $0.id == id }) else {
-            return .constant(ChatThread(title: "Missing", ttlSeconds: AppState.chatTTL))
-        }
-        return $threads[idx]
+            .listStyle(.plain)
+            .background(Color.white)
+            .navigationTitle("Chats")
+        } 
     }
 }
 
@@ -71,12 +53,14 @@ struct InboxView: View {
 struct ThreadCard: View {
     let thread: ChatThread
     let isEnded: Bool
+    @ObservedObject var app: AppState
 
     // 假设未读数，之后可以加到 ChatThread model 里
     let unreadCount: Int = 0
 
     var lastMessage: String {
-        thread.messages.last?.text ?? "No messages yet"
+        let threadId = thread.id ?? ""
+        return app.messages[threadId]?.last?.text ?? "No messages yet"
     }
 
     var goldGradient: LinearGradient {
@@ -98,7 +82,7 @@ struct ThreadCard: View {
                 .frame(width: 2, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(thread.title)
+                Text(thread.postTitle)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(isEnded ? Color(hex: "#C4B89A") : Color(hex: "#2C2416"))
 
@@ -135,21 +119,22 @@ struct ThreadCard: View {
 
 
 #Preview {
-    NavigationStack {
-        InboxView(
-            threads: .constant([
-                ChatThread(title: "Wandering Soul", messages: [
-                    ChatMessage(text: "hey, your post really resonated with me", isMe: false)
-                ], ttlSeconds: AppState.chatTTL),
-                ChatThread(title: "Quiet Rain", messages: [
-                    ChatMessage(text: "thank you for listening", isMe: true)
-                ], ttlSeconds: 0, isManuallyFrozen: true)
-            ]),
-            isFrozenNow: { thread in
-                thread.isManuallyFrozen || Date() >= thread.expiresAt
-            },
-            onSend: { _, _ in },
-            onManualFreeze: { _ in }
-        )
-    }
+//     NavigationStack {
+//         InboxView(
+//             threads: .constant([
+//                 ChatThread(title: "Wandering Soul", messages: [
+//                     ChatMessage(text: "hey, your post really resonated with me", isMe: false)
+//                 ], ttlSeconds: AppState.chatTTL),
+//                 ChatThread(title: "Quiet Rain", messages: [
+//                     ChatMessage(text: "thank you for listening", isMe: true)
+//                 ], ttlSeconds: 0, isManuallyFrozen: true)
+//             ]),
+//             isFrozenNow: { thread in
+//                 thread.isManuallyFrozen || Date() >= thread.expiresAt
+//             },
+//             onSend: { _, _ in },
+//             onManualFreeze: { _ in }
+//         )
+//     }
+    InboxView(app: AppState(authService: AuthService()))
 }
