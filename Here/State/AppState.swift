@@ -1,9 +1,3 @@
-//
-//  AppState.swift
-//  Here
-//
-//  Created by Aaron Lee on 2/10/26.
-//
 import SwiftUI
 import FirebaseFirestore
 import Combine
@@ -115,6 +109,16 @@ final class AppState: ObservableObject {
             print("Post saved with \(imageURLs.count) image(s)")
         } catch {
             print("Error adding post: \(error.localizedDescription)")
+        }
+    }
+  
+    func likePost(postId: String) async {
+        do {
+            try await db.collection("posts").document(postId).updateData([
+                "likeCount": FieldValue.increment(Int64(1))
+            ])
+        } catch {
+            print("Error liking post: \(error.localizedDescription)")
         }
     }
 
