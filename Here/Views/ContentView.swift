@@ -69,9 +69,6 @@ struct ContentView: View {
                     .tag(MainTab.profile)
             }
             .toolbar(.hidden, for: .tabBar)
-            .safeAreaInset(edge: .bottom) {
-                Color.clear.frame(height: 80)
-            }
 
             HStack(spacing: 0) {
                 CustomTabItem(

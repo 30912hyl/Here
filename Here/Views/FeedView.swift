@@ -193,7 +193,6 @@ struct SinglePostView: View {
                     }
                     .padding(.horizontal, 28)
                     .padding(.vertical, 20)
-                    //.padding(.bottom, 50) // Clear the tab bar
                 }
             }
         }
