@@ -3,7 +3,7 @@ import SwiftUI
 struct FeedView: View {
     let posts: [Post]
     let onStartChat: (Post) -> Void
-    let onLike: (UUID) -> Void
+    let onLike: (String) -> Void
 
     var body: some View {
         if posts.isEmpty {
@@ -36,7 +36,7 @@ struct FeedView: View {
                 }
             }
             .scrollTargetBehavior(.paging)
-            .ignoresSafeArea()
+            .ignoresSafeArea(edges: .top)
         }
     }
 }
@@ -45,7 +45,7 @@ struct FeedView: View {
 struct SinglePostView: View {
     let post: Post
     let onStartChat: (Post) -> Void
-    let onLike: (UUID) -> Void
+    let onLike: (String) -> Void
 
     @State private var liked = false
     @State private var likeScale = 1.0
@@ -60,46 +60,48 @@ struct SinglePostView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.white.ignoresSafeArea()
-              
-            // Background: first image fills the screen, or a gradient fallback
-            if let firstURL = post.imageURLs.first, let url = URL(string: firstURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .overlay(Color.black.opacity(0.4))
-                    case .failure:
-                        EmptyView()
-                    case .empty:
-                        //gradientFallback.overlay(ProgressView().tint(.white))
-                        EmptyView()
-                    @unknown default:
-                        EmptyView()
+        GeometryReader { geo in
+            ZStack {
+                Color.white.ignoresSafeArea()
+                
+                // Background image if exists
+                if let firstURL = post.imageURLs.first, let url = URL(string: firstURL) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                                //.overlay(Color.white.opacity(0.15))
+                        case .failure:
+                            EmptyView()
+                        case .empty:
+                            //gradientFallback.overlay(ProgressView().tint(.white))
+                            EmptyView()
+                        @unknown default:
+                            EmptyView()
+                        }
                     }
+                    .clipped()
                 }
-                .clipped()
-            }
-
-            VStack(spacing: 0) {
-                // Scrollable content area - centered
-                GeometryReader { geo in
+                
+                VStack(spacing: 0) {
+                    // Scrollable content area - centered
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 16) {
                             Text(post.title)
                                 .font(.system(size: 24, weight: .light))
                                 .foregroundColor(.black)
-
+                            
                             if !post.bodyText.isEmpty {
                                 Text(post.bodyText)
                                     .font(.system(size: 16, weight: .light))
                                     .foregroundColor(Color(hex: "#5C5C5C"))
                                     .lineSpacing(6)
                             }
-
+                            
                             // Extra image thumbnails
                             if post.imageURLs.count > 1 {
                                 ScrollView(.horizontal, showsIndicators: false) {
@@ -112,87 +114,87 @@ struct SinglePostView: View {
                                                     Color.gray.opacity(0.3)
                                                 }
                                                 .frame(width: 80, height: 80)
-                                                .clipShape(RoundedRectangle(cornerRadius: 12)) 
+                                                .clipShape(RoundedRectangle(cornerRadius: 12))
                                             }
                                         }
                                     }
                                 }
-                            }  
-                        }
-                        .padding(.horizontal, 28)
-                        .frame(minHeight: geo.size.height, alignment: .center)
-                    }
-                }
-
-                // Action buttons — always pinned at bottom
-                HStack(spacing: 20) {
-                    // Like button
-                    Button {
-                        guard !liked else { return }
-                        liked = true
-                        if let postId = post.id {
-                            onLike(postId)
-                        }
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
-                            likeScale = 1.4
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                likeScale = 1.0
                             }
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: liked ? "heart.fill" : "heart")
-                                .font(.system(size: 20, weight: .light))
-                                .foregroundStyle(
-                                    liked
-                                    ? goldGradient
-                                    : LinearGradient(colors: [Color(hex: "#D4C5A0")], startPoint: .top, endPoint: .bottom)
-                                )
-                                .scaleEffect(likeScale)
-                            Text("\(post.likeCount + (liked ? 1 : 0))")
-                                .font(.system(size: 13, weight: .light))
-                                .foregroundColor(liked ? Color(hex: "#C9A84C") : Color(hex: "#D4C5A0"))
-                        }
+                        .padding(.horizontal, 28)
+                        .frame(minHeight: geo.size.height - 140, alignment: .center)
                     }
-
-                    // Chat button
-                    Button {
-                        onStartChat(post)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "bubble.left")
-                                .font(.system(size: 14, weight: .light))
-                            Text("Chat privately")
-                                .font(.system(size: 13, weight: .light))
-                                .tracking(0.3)
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 9)
-                        .background(goldGradient)
-                        .clipShape(Capsule())
-                    }
-
-                    Spacer()
-
-                    // Report menu
-                    Menu {
-                        Button(role: .destructive) {
-                            showReport = true
+                    
+                    // Action buttons — always pinned at bottom
+                    HStack(spacing: 20) {
+                        // Like button
+                        Button {
+                            guard !liked else { return }
+                            liked = true
+                            if let postId = post.id {
+                                onLike(postId)
+                            }
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
+                                likeScale = 1.4
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                    likeScale = 1.0
+                                }
+                            }
                         } label: {
-                            Label("Report Post", systemImage: "flag")
+                            HStack(spacing: 6) {
+                                Image(systemName: liked ? "heart.fill" : "heart")
+                                    .font(.system(size: 20, weight: .light))
+                                    .foregroundStyle(
+                                        liked
+                                        ? goldGradient
+                                        : LinearGradient(colors: [Color(hex: "#D4C5A0")], startPoint: .top, endPoint: .bottom)
+                                    )
+                                    .scaleEffect(likeScale)
+                                Text("\(post.likeCount)")
+                                    .font(.system(size: 13, weight: .light))
+                                    .foregroundColor(liked ? Color(hex: "#C9A84C") : Color(hex: "#D4C5A0"))
+                            }
                         }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 18, weight: .light))
-                            .foregroundColor(Color(hex: "#D4C5A0"))
+                        
+                        // Chat button
+                        Button {
+                            onStartChat(post)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "bubble.left")
+                                    .font(.system(size: 14, weight: .light))
+                                Text("Chat privately")
+                                    .font(.system(size: 13, weight: .light))
+                                    .tracking(0.3)
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 9)
+                            .background(goldGradient)
+                            .clipShape(Capsule())
+                        }
+                        
+                        Spacer()
+                        
+                        // Report menu
+                        Menu {
+                            Button(role: .destructive) {
+                                showReport = true
+                            } label: {
+                                Label("Report Post", systemImage: "flag")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 18, weight: .light))
+                                .foregroundColor(Color(hex: "#D4C5A0"))
+                        }
                     }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 20)
+                    //.padding(.bottom, 50) // Clear the tab bar
                 }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 20)
-                .padding(.bottom, 80) // Clear the tab bar
             }
         }
         .alert("Report this post?", isPresented: $showReport) {
@@ -202,15 +204,13 @@ struct SinglePostView: View {
             Text("Thank you for helping keep this space safe.")
         }
     }
-    
-    // never used?
-    private var gradientFallback: some View {
-        LinearGradient(
-            colors: [.black, Color(.darkGray)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
+//    private var gradientFallback: some View {
+//        LinearGradient(
+//            colors: [.black, Color(.darkGray)],
+//            startPoint: .topLeading,
+//            endPoint: .bottomTrailing
+//        )
+//    }
 }
 
 #Preview {

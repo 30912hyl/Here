@@ -39,7 +39,7 @@ struct ContentView: View {
 
     private var mainTabView: some View {
         ZStack(alignment: .bottom) {
-            Color.white.ignoresSafeArea()
+            Color.black.ignoresSafeArea()
 
             TabView(selection: $selectedTab) {
                 VoiceView()
@@ -69,6 +69,9 @@ struct ContentView: View {
                     .tag(MainTab.profile)
             }
             .toolbar(.hidden, for: .tabBar)
+            .safeAreaInset(edge: .bottom) {
+                Color.clear.frame(height: 80)
+            }
 
             HStack(spacing: 0) {
                 CustomTabItem(
@@ -119,7 +122,6 @@ struct ContentView: View {
             }
             .padding(.horizontal, 12)
             .padding(.top, 8)
-            .padding(.bottom, 24)
             .background(.ultraThinMaterial)
         }
         .sheet(isPresented: $showCreateSheet) {

@@ -125,7 +125,7 @@ struct ChatDetailView: View {
                         .stroke(Color(hex: "#E8E0CC"), lineWidth: 1)
                 )
 
-            Button("Send") {
+            Button {
                 let text = input
                 input = ""
                 Task { await app.sendMessage(threadId: threadId, text: text) }
@@ -231,7 +231,8 @@ struct MessageBubble: View {
 
     var body: some View {
         HStack {
-            if isMe { Spacer(minLength: 60) }
+            if isMe || isSystem { Spacer(minLength: 60) }
+            
             Text(message.text)
                 .font(.system(size: 15, weight: .light))
                 .foregroundColor(isSystem ? Color(hex: "#C4A55A") : .black)
@@ -243,7 +244,7 @@ struct MessageBubble: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .stroke(Color(hex: "#E8E0CC"), lineWidth: 1)
                 )
-            if isMe { Spacer(minLength: 60) }
+            if !isMe || isSystem { Spacer(minLength: 60) }
         }
     }
 }
