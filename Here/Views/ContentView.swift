@@ -47,14 +47,15 @@ struct ContentView: View {
 
                 FeedView(
                     posts: app.posts,
+                    uid: app.uid,
                     onStartChat: { post in
                         Task {
                             _ = await app.createThreadFromPost(post)
                             selectedTab = .inbox
                         }
                     },
-                    onLike: { id in
-                        Task { await app.likePost(postId: id) }
+                    onToggleLike: { post in
+                        Task { await app.toggleLike(post: post) }
                     }
                 )
                 .tag(MainTab.feed)
