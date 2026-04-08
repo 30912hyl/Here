@@ -19,6 +19,10 @@ final class AppState: ObservableObject {
 
     var uid: String { authService.uid ?? "" }
 
+    init() {
+        self.authService = AuthService()
+    }
+
     init(authService: AuthService) {
         self.authService = authService
     }
@@ -26,6 +30,7 @@ final class AppState: ObservableObject {
     // MARK: - Listeners
 
     func startListening() {
+        print("startListening called, uid: '\(uid)'")
         listenToPosts()
         listenToThreads()
     }

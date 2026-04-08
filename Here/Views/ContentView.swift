@@ -8,7 +8,7 @@ struct ContentView: View {
     @State private var showCreateSheet = false
     @State private var heartBeating = false
 
-    @StateObject private var app = AppState(authService: AuthService())
+    @EnvironmentObject var app: AppState
 
     var body: some View {
         Group {
@@ -17,23 +17,6 @@ struct ContentView: View {
             } else {
                 ProgressView("Connecting...")
             }
-        }
-        .onAppear {
-            print("ContentView appeared, isSignedIn: \(authService.isSignedIn)")
-            if authService.isSignedIn {
-                app.authService = authService
-                app.startListening()
-            }
-        }
-        .onChange(of: authService.isSignedIn) {
-            print("isSignedIn changed to: \(authService.isSignedIn)")
-            if authService.isSignedIn {
-                app.authService = authService
-                app.startListening()
-            }
-        }
-        .onDisappear {
-            app.stopListening()
         }
     }
 
