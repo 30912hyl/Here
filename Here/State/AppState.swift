@@ -130,6 +130,15 @@ final class AppState: ObservableObject {
         // Don't chat with yourself
         guard post.authorUID != uid else { return nil }
 
+        // Return existing active thread if one already exists with this person
+        if let existing = threads.first(where: {
+            !$0.isFrozen() &&
+            $0.participants.contains(uid) &&
+            $0.participants.contains(post.authorUID)
+        }) {
+            return existing.id
+        }
+
         let thread = ChatThread(
             postTitle: post.title,
             participants: [uid, post.authorUID]

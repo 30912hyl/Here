@@ -9,8 +9,8 @@ import PhotosUI
 
 struct CreatePostView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var app: AppState
-    
+    let onSubmit: (String, String, [UIImage]) async -> Void
+
     @State private var title = ""
     @State private var bodyText = ""
     @State private var selectedItems: [PhotosPickerItem] = []
@@ -31,13 +31,11 @@ struct CreatePostView: View {
                     TextField("Give your post a title", text: $title)
                 }
 
-                // MARK: Description text
                 Section("Description") {
                     TextEditor(text: $bodyText)
                         .frame(minHeight: 120)
                 }
 
-                // MARK: Images
                 Section {
                     PhotosPicker(
                         selection: $selectedItems,
@@ -77,7 +75,7 @@ struct CreatePostView: View {
                 } footer: {
                     Text("Add text, photos, or both. At least one is required along with a title.")
                 }
-                
+
                 Section {
                     Text("This post will disappear from the feed after 24 hours.")
                         .font(.footnote)
@@ -117,10 +115,10 @@ struct CreatePostView: View {
 
     private func submitPost() async {
         isUploading = true
-        await app.addPost(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            bodyText: bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
-            images: images
+        await onSubmit(
+            title.trimmingCharacters(in: .whitespacesAndNewlines),
+            bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
+            images
         )
         isUploading = false
         dismiss()
@@ -128,5 +126,5 @@ struct CreatePostView: View {
 }
 
 #Preview {
-    CreatePostView(app: AppState(authService: AuthService()))
+    CreatePostView(onSubmit: { _, _, _ in })
 }

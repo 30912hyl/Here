@@ -122,8 +122,10 @@ struct ContentView: View {
             .background(.ultraThinMaterial)
         }
         .sheet(isPresented: $showCreateSheet) {
-            CreatePostView(app: app)
-                .presentationCornerRadius(28)
+            CreatePostView(onSubmit: { title, bodyText, images in
+                await app.addPost(title: title, bodyText: bodyText, images: images)
+            })
+            .presentationCornerRadius(28)
         }
     }
 
