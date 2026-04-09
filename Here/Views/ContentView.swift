@@ -24,6 +24,7 @@ struct ContentView: View {
                 app.authService = authService
                 app.startListening()
             }
+            KeyboardDismisser.install()
         }
         .onChange(of: authService.isSignedIn) {
             print("isSignedIn changed to: \(authService.isSignedIn)")
@@ -194,6 +195,25 @@ struct CustomTabItem: View {
             .frame(maxWidth: .infinity)
         }
         .animation(.easeInOut(duration: 0.2), value: isSelected)
+    }
+}
+
+// MARK: - Keyboard Dismisser
+private final class KeyboardDismisser: NSObject {
+    static let shared = KeyboardDismisser()
+
+    static func install() {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) else { return }
+        let tap = UITapGestureRecognizer(target: shared, action: #selector(dismiss))
+        tap.cancelsTouchesInView = false
+        window.addGestureRecognizer(tap)
+    }
+
+    @objc private func dismiss() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 
