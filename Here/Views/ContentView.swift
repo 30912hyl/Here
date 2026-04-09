@@ -47,6 +47,7 @@ struct ContentView: View {
 
                 FeedView(
                     posts: app.posts,
+                    tags: app.topTags(),
                     onStartChat: { post in
                         Task {
                             _ = await app.createThreadFromPost(post)
@@ -209,7 +210,3 @@ extension Color {
     }
 }
 
-#Preview {
-    ContentView()
-        .environmentObject(AuthService())
-}

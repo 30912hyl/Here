@@ -17,6 +17,7 @@ struct Post: Identifiable, Codable {
     let createdAt: Date
     let expiresAt: Date
     var likeCount: Int
+    var tags: [String]
 
     init(
         id: String? = nil,
@@ -25,7 +26,8 @@ struct Post: Identifiable, Codable {
         imageURLs: [String] = [],
         authorUID: String,
         createdAt: Date = Date(),
-        likeCount: Int = 0
+        likeCount: Int = 0,
+        tags: [String] = []
     ) {
         self.id = id
         self.title = title
@@ -35,10 +37,24 @@ struct Post: Identifiable, Codable {
         self.createdAt = createdAt
         self.expiresAt = createdAt.addingTimeInterval(24 * 60 * 60)
         self.likeCount = likeCount
+        self.tags = tags
     }
-    /// A post is valid if it has a title and at least some description content (text or images)
-//    var hasContent: Bool {
-//        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-//            && (!bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty)
-//    }
+    // Custom Codable decoder so that Firestore documents created before the `tags`
+    // field was added can still decode successfully (falls back to an empty array).
+    // `id` is omitted from CodingKeys — Firestore injects @DocumentID automatically.
+    enum CodingKeys: String, CodingKey {
+        case title, bodyText, imageURLs, authorUID, createdAt, expiresAt, likeCount, tags
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        title     = try  c.decode(String.self,    forKey: .title)
+        bodyText  = (try? c.decode(String.self,   forKey: .bodyText))  ?? ""
+        imageURLs = (try? c.decode([String].self, forKey: .imageURLs)) ?? []
+        authorUID = try  c.decode(String.self,    forKey: .authorUID)
+        createdAt = try  c.decode(Date.self,      forKey: .createdAt)
+        expiresAt = try  c.decode(Date.self,      forKey: .expiresAt)
+        likeCount = (try? c.decode(Int.self,      forKey: .likeCount)) ?? 0
+        tags      = (try? c.decode([String].self, forKey: .tags))      ?? []
+    }
 }
