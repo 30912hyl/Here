@@ -21,13 +21,19 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct HereApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var authService = AuthService()
+    @StateObject private var appState = AppState()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(authService)
+                .environmentObject(appState)
                 .task {
                     await authService.signInAnonymously()
+                    if authService.isSignedIn {
+                        appState.authService = authService
+                        appState.startListening()
+                    }
                 }
         }
     }
