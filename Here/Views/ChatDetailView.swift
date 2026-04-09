@@ -32,29 +32,24 @@ struct ChatDetailView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.white.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 10) {
-                            ForEach(messages) { m in
-                                MessageBubble(message: m, uid: uid)
-                                    .id(m.id)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    }
-                    .defaultScrollAnchor(.bottom)              
-                    .onChange(of: messages.count) {
-                        if let lastId = messages.last?.id {
-                            withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
-                        }
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    ForEach(messages) { m in
+                        MessageBubble(message: m, uid: uid)
+                            .id(m.id)
                     }
                 }
-
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .defaultScrollAnchor(.bottom)
+            .onChange(of: messages.count) {
+                if let lastId = messages.last?.id {
+                    withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !frozen {
                     chatInputBar
                 } else {
@@ -62,6 +57,7 @@ struct ChatDetailView: View {
                 }
             }
         }
+        .background(Color.white.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.white, for: .navigationBar)
         .toolbar {

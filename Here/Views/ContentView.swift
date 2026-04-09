@@ -2,11 +2,11 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var authService: AuthService
-    
+
     @State private var selectedTab: MainTab = .feed
-    @State private var lastNonCreateTab: MainTab = .feed
     @State private var showCreateSheet = false
     @State private var heartBeating = false
+    @State private var showTabBar = true
 
     @StateObject private var app = AppState(authService: AuthService())
 
@@ -38,39 +38,42 @@ struct ContentView: View {
     }
 
     private var mainTabView: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
+        TabView(selection: $selectedTab) {
+            VoiceView()
+                .tag(MainTab.voice)
 
-            TabView(selection: $selectedTab) {
-                VoiceView()
-                    .tag(MainTab.voice)
-
-                FeedView(
-                    posts: app.posts,
-                    uid: app.uid,
-                    onStartChat: { post in
-                        Task {
-                            _ = await app.createThreadFromPost(post)
-                            selectedTab = .inbox
-                        }
-                    },
-                    onToggleLike: { post in
-                        Task { await app.toggleLike(post: post) }
+            FeedView(
+                posts: app.posts,
+                uid: app.uid,
+                onStartChat: { post in
+                    Task {
+                        _ = await app.createThreadFromPost(post)
+                        selectedTab = .inbox
                     }
-                )
-                .tag(MainTab.feed)
+                },
+                onToggleLike: { post in
+                    Task { await app.toggleLike(post: post) }
+                }
+            )
+            .tag(MainTab.feed)
 
+            Color.clear.tag(MainTab.create)
 
-                Color.clear.tag(MainTab.create)
+            InboxView(app: app)
+                .tag(MainTab.inbox)
 
-                InboxView(app: app)
-                    .tag(MainTab.inbox)
-
-                ProfileView()
-                    .tag(MainTab.profile)
-            }
-            .toolbar(.hidden, for: .tabBar)
-
+            ProfileView()
+                .tag(MainTab.profile)
+        }
+        .toolbar(.hidden, for: .tabBar)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            withAnimation(.easeInOut(duration: 0.25)) { showTabBar = false }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeInOut(duration: 0.25)) { showTabBar = true }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+          if showTabBar {
             HStack(spacing: 0) {
                 CustomTabItem(
                     iconDefault: "waveform",
@@ -91,15 +94,11 @@ struct ContentView: View {
                     startHeartbeat()
                     showCreateSheet = true
                 } label: {
-                    ZStack {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 44, weight: .thin))
-                            .foregroundStyle(goldGradient)
-                            .shadow(color: Color(hex: "#C9A84C").opacity(0.4), radius: 6, y: 2)
-                            .scaleEffect(heartBeating ? 1.25 : 1.0)
-                    }
-                    .scaleEffect(heartBeating ? 1.25 : 1.0)
-                    
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 44, weight: .thin))
+                        .foregroundStyle(goldGradient)
+                        .shadow(color: Color(hex: "#C9A84C").opacity(0.4), radius: 6, y: 2)
+                        .scaleEffect(heartBeating ? 1.25 : 1.0)
                 }
                 .frame(maxWidth: .infinity)
 
@@ -121,6 +120,7 @@ struct ContentView: View {
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .background(.ultraThinMaterial)
+          }
         }
         .sheet(isPresented: $showCreateSheet) {
             CreatePostView(app: app)
