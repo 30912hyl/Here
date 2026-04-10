@@ -111,14 +111,14 @@ struct ChatDetailView: View {
     // MARK: - Input Bar
     private var chatInputBar: some View {
         HStack(spacing: 12) {
-            TextField("", text: $input)
+            TextField("", text: $input, axis: .vertical)
                 .font(.system(size: 15, weight: .light))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Color.white)
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(Color(hex: "#E8E0CC"), lineWidth: 1)
                 )
 
