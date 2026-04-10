@@ -18,6 +18,7 @@ struct Post: Identifiable, Codable {
     let expiresAt: Date
     var likeCount: Int
     var tags: [String]
+    var isPrivate: Bool
 
     init(
         id: String? = nil,
@@ -27,7 +28,8 @@ struct Post: Identifiable, Codable {
         authorUID: String,
         createdAt: Date = Date(),
         likeCount: Int = 0,
-        tags: [String] = []
+        tags: [String] = [],
+        isPrivate: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -35,15 +37,16 @@ struct Post: Identifiable, Codable {
         self.imageURLs = imageURLs
         self.authorUID = authorUID
         self.createdAt = createdAt
-        self.expiresAt = createdAt.addingTimeInterval(24 * 60 * 60)
+        self.expiresAt = createdAt.addingTimeInterval(48 * 60 * 60)
         self.likeCount = likeCount
         self.tags = tags
+        self.isPrivate = isPrivate
     }
     // Custom Codable decoder so that Firestore documents created before the `tags`
     // field was added can still decode successfully (falls back to an empty array).
     // `id` is omitted from CodingKeys — Firestore injects @DocumentID automatically.
     enum CodingKeys: String, CodingKey {
-        case title, bodyText, imageURLs, authorUID, createdAt, expiresAt, likeCount, tags
+        case title, bodyText, imageURLs, authorUID, createdAt, expiresAt, likeCount, tags, isPrivate
     }
 
     init(from decoder: Decoder) throws {
@@ -56,5 +59,6 @@ struct Post: Identifiable, Codable {
         expiresAt = try  c.decode(Date.self,      forKey: .expiresAt)
         likeCount = (try? c.decode(Int.self,      forKey: .likeCount)) ?? 0
         tags      = (try? c.decode([String].self, forKey: .tags))      ?? []
+        isPrivate = (try? c.decode(Bool.self,     forKey: .isPrivate)) ?? false
     }
 }

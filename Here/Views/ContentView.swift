@@ -46,7 +46,7 @@ struct ContentView: View {
                     .tag(MainTab.voice)
 
                 FeedView(
-                    posts: app.posts,
+                    posts: app.posts.filter { !$0.isPrivate || $0.authorUID == app.uid },
                     tags: app.topTags(),
                     onStartChat: { post in
                         Task {
@@ -122,9 +122,8 @@ struct ContentView: View {
             .padding(.top, 8)
             .background(.ultraThinMaterial)
         }
-        .sheet(isPresented: $showCreateSheet) {
+        .fullScreenCover(isPresented: $showCreateSheet) {
             CreatePostView(app: app)
-                .presentationCornerRadius(28)
         }
     }
 
@@ -146,7 +145,7 @@ struct ContentView: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+            colors: [Color(hex: "#EDD9A3"), Color(hex: "#E8C870"), Color(hex: "#D4A840")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

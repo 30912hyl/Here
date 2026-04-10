@@ -22,19 +22,19 @@ private let warmBackground = Color(hex: "#FAF8F4")
 struct ProfileView: View {
     var body: some View {
         NavigationStack {
-            warmBackground.ignoresSafeArea()
-                .overlay(
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 28) {
-                            GreetingSection()
-                            AccountCard()
-                            ProfileMenuCard()
-                            ProfileSignOutButton()
-                        }
-                        .padding(.top, 36)
-                        .padding(.bottom, 120)
+            ZStack {
+                warmBackground.ignoresSafeArea()
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        GreetingSection()
+                        AccountCard()
+                        ProfileMenuCard()
+                        ProfileBottomActions()
                     }
-                )
+                    .padding(.top, 36)
+                    .padding(.bottom, 110)
+                }
+            }
         }
     }
 }
@@ -43,18 +43,11 @@ struct ProfileView: View {
 
 private struct GreetingSection: View {
     var body: some View {
-        VStack(spacing: 6) {
-            Text("here you are,")
-                .font(.system(size: 30, weight: .light))
-                .foregroundColor(profileBrownText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            Text("Part of this space since March 2026")
-                .font(.system(size: 13, weight: .light))
-                .foregroundColor(profileMutedGold)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(.horizontal, 28)
+        Text("here you are,")
+            .font(.system(size: 32, weight: .light))
+            .foregroundColor(profileBrownText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 28)
     }
 }
 
@@ -74,7 +67,7 @@ private struct AccountCard: View {
                     .foregroundStyle(profileGoldGradient)
                     .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("LINKED NUMBER")
                         .font(.system(size: 10, weight: .medium))
                         .tracking(1.5)
@@ -90,13 +83,13 @@ private struct AccountCard: View {
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(profileGoldAccent)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 20)
 
             Rectangle()
                 .fill(profileGoldAccent.opacity(0.15))
                 .frame(height: 0.5)
-                .padding(.leading, 58)
+                .padding(.leading, 60)
 
             // ID row
             HStack(spacing: 14) {
@@ -105,8 +98,8 @@ private struct AccountCard: View {
                     .foregroundStyle(profileGoldGradient)
                     .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("YOUR ID")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("YOUR UNIQUE ID")
                         .font(.system(size: 10, weight: .medium))
                         .tracking(1.5)
                         .foregroundColor(profileMutedGold)
@@ -115,6 +108,7 @@ private struct AccountCard: View {
                         TextField("", text: $editingText)
                             .font(.system(size: 15, weight: .regular, design: .monospaced))
                             .foregroundColor(profileBrownText)
+                            .tint(profileGoldAccent)
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                             .submitLabel(.done)
@@ -154,13 +148,13 @@ private struct AccountCard: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 20)
         }
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.white)
-                .shadow(color: profileGoldAccent.opacity(0.1), radius: 10, y: 3)
+                .shadow(color: profileGoldAccent.opacity(0.1), radius: 12, y: 4)
         )
         .padding(.horizontal, 24)
     }
@@ -170,7 +164,7 @@ private struct AccountCard: View {
 
 private struct ProfileMenuCard: View {
     @State private var notificationsOn = true
-    @State private var postsPaused = false
+    @State private var postsHidden = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -185,26 +179,15 @@ private struct ProfileMenuCard: View {
 
             ProfileMenuDivider()
 
-            ProfileMenuRow(icon: "moon", label: "Pause My Posts") {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Toggle("", isOn: $postsPaused)
-                        .tint(profileGoldAccent)
-                        .labelsHidden()
-                        .scaleEffect(0.82)
-                    if postsPaused {
-                        Text("hidden from feed")
-                            .font(.system(size: 10, weight: .light))
-                            .foregroundColor(profileMutedGold)
-                    }
-                }
-            }
-
-            ProfileMenuDivider()
-
-            ProfileMenuRow(icon: "lock", label: "App Lock") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .light))
-                    .foregroundColor(profileMutedGold)
+            ProfileMenuRow(
+                icon: "moon",
+                label: "Hide My Posts",
+                subtitle: "your posts won't appear in the shared feed"
+            ) {
+                Toggle("", isOn: $postsHidden)
+                    .tint(profileGoldAccent)
+                    .labelsHidden()
+                    .scaleEffect(0.85)
             }
 
             ProfileMenuDivider()
@@ -213,7 +196,7 @@ private struct ProfileMenuCard: View {
                 Toggle("", isOn: $notificationsOn)
                     .tint(profileGoldAccent)
                     .labelsHidden()
-                    .scaleEffect(0.82)
+                    .scaleEffect(0.85)
             }
 
             ProfileMenuDivider()
@@ -234,7 +217,7 @@ private struct ProfileMenuCard: View {
 
             ProfileMenuDivider()
 
-            ProfileMenuRow(icon: "hand.raised", label: "Blocked Accounts") {
+            ProfileMenuRow(icon: "questionmark.circle", label: "Help & Feedback") {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .light))
                     .foregroundColor(profileMutedGold)
@@ -242,7 +225,7 @@ private struct ProfileMenuCard: View {
 
             ProfileMenuDivider()
 
-            ProfileMenuRow(icon: "questionmark.circle", label: "Help & Feedback") {
+            ProfileMenuRow(icon: "doc.text", label: "About & Legal") {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .light))
                     .foregroundColor(profileMutedGold)
@@ -251,7 +234,7 @@ private struct ProfileMenuCard: View {
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.white)
-                .shadow(color: profileGoldAccent.opacity(0.1), radius: 10, y: 3)
+                .shadow(color: profileGoldAccent.opacity(0.1), radius: 12, y: 4)
         )
         .padding(.horizontal, 24)
     }
@@ -260,6 +243,7 @@ private struct ProfileMenuCard: View {
 private struct ProfileMenuRow<Trailing: View>: View {
     let icon: String
     let label: String
+    var subtitle: String? = nil
     @ViewBuilder let trailing: () -> Trailing
 
     var body: some View {
@@ -269,15 +253,24 @@ private struct ProfileMenuRow<Trailing: View>: View {
                 .foregroundStyle(profileGoldGradient)
                 .frame(width: 24)
 
-            Text(label)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundColor(profileBrownText)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(label)
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(profileBrownText)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 11, weight: .light))
+                        .foregroundColor(profileMutedGold)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
             Spacer()
 
             trailing()
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 22)
         .padding(.vertical, 16)
     }
 }
@@ -287,21 +280,31 @@ private struct ProfileMenuDivider: View {
         Rectangle()
             .fill(profileGoldAccent.opacity(0.15))
             .frame(height: 0.5)
-            .padding(.leading, 58)
+            .padding(.leading, 60)
     }
 }
 
-// MARK: - Sign Out
+// MARK: - Bottom Actions (Sign Out + Delete Account)
 
-private struct ProfileSignOutButton: View {
+private struct ProfileBottomActions: View {
     var body: some View {
-        Button {} label: {
-            Text("Sign Out")
-                .font(.system(size: 14, weight: .light))
-                .tracking(0.3)
-                .foregroundColor(profileBrownText.opacity(0.35))
+        VStack(spacing: 16) {
+            Button {} label: {
+                Text("Sign Out")
+                    .font(.system(size: 14, weight: .light))
+                    .tracking(0.3)
+                    .foregroundColor(profileGoldAccent.opacity(0.8))
+            }
+            .buttonStyle(.plain)
+
+            Button {} label: {
+                Text("Delete Account")
+                    .font(.system(size: 12, weight: .light))
+                    .tracking(0.2)
+                    .foregroundColor(profileBrownText.opacity(0.25))
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 }
 
@@ -327,7 +330,6 @@ struct MyPostsView: View {
             warmBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Tab bar
                 HStack(spacing: 0) {
                     MyPostsTab(label: "Active", selected: !showArchived) { showArchived = false }
                     MyPostsTab(label: "Archived", selected: showArchived) { showArchived = true }

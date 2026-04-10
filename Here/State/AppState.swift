@@ -105,7 +105,7 @@ final class AppState: ObservableObject {
 
     // MARK: - Posts
 
-    func addPost(title: String, bodyText: String, images: [UIImage], tags: [String] = []) async {
+    func addPost(title: String, bodyText: String, images: [UIImage], tags: [String] = [], isPrivate: Bool = false) async {
         do {
             // Upload images first
             var imageURLs: [String] = []
@@ -123,7 +123,8 @@ final class AppState: ObservableObject {
                 bodyText: bodyText,
                 imageURLs: imageURLs,
                 authorUID: uid,
-                tags: tags.map { $0.lowercased() }
+                tags: tags.map { $0.lowercased() },
+                isPrivate: isPrivate
             )
 
             try db.collection("posts").addDocument(from: post)

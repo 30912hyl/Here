@@ -7,10 +7,29 @@
 import SwiftUI
 import PhotosUI
 
+// MARK: - Palette (mirrors ProfileView / FeedView)
+
+private let cpGoldColors: [Color] = [
+    Color(hex: "#F8EFD6"),
+    Color(hex: "#F2DFAF"),
+    Color(hex: "#E8C97A")
+]
+private let cpGoldAccent   = Color(hex: "#E6C35C")
+private let cpBrownText    = Color(hex: "#5C3A1E")
+private let cpMutedGold    = Color(hex: "#D8C898")
+private let cpWarmBG       = Color(hex: "#FAF8F4")
+private let cpGoldGradient = LinearGradient(
+    colors: cpGoldColors,
+    startPoint: .topLeading,
+    endPoint: .bottomTrailing
+)
+
+// MARK: - CreatePostView
+
 struct CreatePostView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var app: AppState
-    
+
     @State private var title = ""
     @State private var bodyText = ""
     @State private var selectedItems: [PhotosPickerItem] = []
@@ -18,177 +37,344 @@ struct CreatePostView: View {
     @State private var isUploading = false
     @State private var selectedTags: [String] = []
     @State private var customTagInput = ""
+    @State private var onlyForMe = false
 
-    private let presetTags = ["sad", "happy", "anxious", "grateful", "lonely", "excited", "vent", "advice", "confused", "proud"]
+    // warm/positive tags first, heavier ones further back
+    private let presetTags = [
+        "happy", "grateful", "excited", "proud",
+        "hopeful", "lonely", "anxious", "confused",
+        "sad", "vent", "advice"
+    ]
 
     private var isValid: Bool {
-        let hasTitle = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasText = !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasImages = !images.isEmpty
-        return hasTitle && (hasText || hasImages)
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let b = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !t.isEmpty && !b.isEmpty
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Title") {
-                    TextField("Give your post a title", text: $title)
-                }
+        ZStack {
+            cpWarmBG.ignoresSafeArea()
 
-                // MARK: Description text
-                Section("Description") {
-                    TextEditor(text: $bodyText)
-                        .frame(minHeight: 120)
-                }
+            VStack(spacing: 0) {
 
-                // MARK: Images
-                Section {
-                    PhotosPicker(
-                        selection: $selectedItems,
-                        maxSelectionCount: 10,
-                        matching: .images
-                    ) {
-                        Label("Add Photos", systemImage: "photo.on.rectangle.angled")
+                // ── Nav bar ─────────────────────────────────────────────
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .light))
+                            .foregroundColor(cpBrownText.opacity(0.4))
+                            .frame(width: 40, height: 40)
                     }
+                    .buttonStyle(.plain)
 
-                    if !images.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(images.indices, id: \.self) { idx in
-                                    ZStack(alignment: .topTrailing) {
-                                        Image(uiImage: images[idx])
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 100, height: 100)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    Spacer()
 
-                                        Button {
-                                            images.remove(at: idx)
-                                            selectedItems.remove(at: idx)
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.white, .black.opacity(0.6))
-                                        }
-                                        .offset(x: 6, y: -6)
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                    }
-                } header: {
-                    Text("Photos")
-                } footer: {
-                    Text("Add text, photos, or both. At least one is required along with a title.")
-                }
-                
-                // MARK: Tags
-                Section {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(presetTags, id: \.self) { tag in
-                                let on = selectedTags.contains(tag)
-                                Button { toggleTag(tag) } label: {
-                                    Text("#\(tag)")
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundStyle(on ? Color.white : Color(hex: "#E6C35C"))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background {
-                                            if on {
-                                                Capsule().fill(LinearGradient(
-                                                    colors: [Color(hex: "#F8EFD6"), Color(hex: "#F2DFAF"), Color(hex: "#E8C97A")],
-                                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                                ))
-                                            } else {
-                                                Capsule().fill(Color.white)
-                                                    .overlay(Capsule().strokeBorder(Color(hex: "#E6C35C"), lineWidth: 1))
-                                            }
-                                        }
-                                }
-                                .buttonStyle(.plain)
-                                .animation(.easeInOut(duration: 0.12), value: on)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus.circle")
-                            .foregroundStyle(Color(hex: "#E6C35C"))
-                        TextField("Add your own tag", text: $customTagInput)
-                            .font(.system(size: 14))
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .onSubmit { addCustomTag() }
-                        if !customTagInput.trimmingCharacters(in: .whitespaces).isEmpty {
-                            Button("Add") { addCustomTag() }
-                                .font(.system(size: 13))
-                                .foregroundStyle(Color(hex: "#E6C35C"))
-                        }
-                    }
-
-                    if !selectedTags.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) {
-                                ForEach(selectedTags, id: \.self) { tag in
-                                    HStack(spacing: 4) {
-                                        Text("#\(tag)")
-                                            .font(.system(size: 12, weight: .medium))
-                                        Button {
-                                            selectedTags.removeAll { $0 == tag }
-                                        } label: {
-                                            Image(systemName: "xmark")
-                                                .font(.system(size: 9, weight: .bold))
-                                        }
-                                    }
-                                    .foregroundStyle(Color(hex: "#8A7A55"))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color(hex: "#F8EFD6"))
-                                    .clipShape(Capsule())
-                                }
-                            }
-                            .padding(.vertical, 2)
-                        }
-                    }
-                } header: {
-                    Text("Tags (optional)")
-                } footer: {
-                    Text("Tags help others find your post. Tap a preset or add your own.")
-                }
-
-                Section {
-                    Text("This post will disappear from the feed after 24 hours.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("New Post")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isUploading)
-                }
-                ToolbarItem(placement: .confirmationAction) {
                     if isUploading {
-                        ProgressView()
+                        ProgressView().tint(cpGoldAccent)
                     } else {
-                        Button("Post") {
+                        Button {
                             Task { await submitPost() }
+                        } label: {
+                            Text(onlyForMe ? "Save" : "Share")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(isValid ? .white : cpMutedGold)
+                                .padding(.horizontal, 22)
+                                .padding(.vertical, 10)
+                                .background {
+                                    if isValid {
+                                        Capsule().fill(cpGoldGradient)
+                                    } else {
+                                        Capsule()
+                                            .fill(Color.clear)
+                                            .overlay(Capsule().strokeBorder(cpMutedGold.opacity(0.4), lineWidth: 1))
+                                    }
+                                }
                         }
                         .disabled(!isValid)
+                        .buttonStyle(.plain)
+                        .animation(.easeInOut(duration: 0.15), value: isValid)
                     }
                 }
-            }
-            .onChange(of: selectedItems) {
-                Task {
-                    images = []
-                    for item in selectedItems {
-                        if let data = try? await item.loadTransferable(type: Data.self),
-                           let uiImage = UIImage(data: data) {
-                            images.append(uiImage)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 20)
+
+                // ── Scrollable content ───────────────────────────────────
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 14) {
+
+                        // Prompt
+                        Text("dear stranger bestie,")
+                            .font(.system(size: 28, weight: .thin))
+                            .foregroundColor(cpBrownText)
+                            .padding(.horizontal, 26)
+                            .padding(.bottom, 6)
+
+                        // ── Title card ───────────────────────────────────
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("TITLE")
+                                .font(.system(size: 11, weight: .medium))
+                                .tracking(1.8)
+                                .foregroundColor(cpMutedGold)
+
+                            TextField("give it a name", text: $title)
+                                .font(.system(size: 18, weight: .regular))
+                                .foregroundColor(cpBrownText)
+                                .tint(cpGoldAccent)
                         }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: cpGoldAccent.opacity(0.09), radius: 10, y: 3)
+                        )
+                        .padding(.horizontal, 24)
+
+                        // ── Words card ───────────────────────────────────
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("WORDS")
+                                .font(.system(size: 11, weight: .medium))
+                                .tracking(1.8)
+                                .foregroundColor(cpMutedGold)
+
+                            ZStack(alignment: .topLeading) {
+                                if bodyText.isEmpty {
+                                    Text("write freely — as much or as little as you need")
+                                        .font(.system(size: 16, weight: .light))
+                                        .foregroundColor(cpMutedGold.opacity(0.65))
+                                        .allowsHitTesting(false)
+                                        .padding(.top, 8)
+                                        .padding(.leading, 5)
+                                }
+                                TextEditor(text: $bodyText)
+                                    .font(.system(size: 16, weight: .regular))
+                                    .foregroundColor(cpBrownText)
+                                    .tint(cpGoldAccent)
+                                    .frame(minHeight: 150)
+                                    .scrollContentBackground(.hidden)
+                                    .background(Color.clear)
+                            }
+                        }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: cpGoldAccent.opacity(0.09), radius: 10, y: 3)
+                        )
+                        .padding(.horizontal, 24)
+
+                        // ── Photos card (optional) ───────────────────────
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(alignment: .center) {
+                                Text("PHOTOS")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .tracking(1.8)
+                                    .foregroundColor(cpMutedGold)
+                                OptionalBadge()
+                                Spacer()
+                                PhotosPicker(
+                                    selection: $selectedItems,
+                                    maxSelectionCount: 10,
+                                    matching: .images
+                                ) {
+                                    Image(systemName: "photo.on.rectangle.angled")
+                                        .font(.system(size: 22, weight: .light))
+                                        .foregroundStyle(cpGoldGradient)
+                                }
+                                .buttonStyle(.plain)
+                            }
+
+                            if images.isEmpty {
+                                Text("add moments that go with your words")
+                                    .font(.system(size: 14, weight: .light))
+                                    .foregroundColor(cpBrownText.opacity(0.35))
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 10) {
+                                        ForEach(images.indices, id: \.self) { idx in
+                                            ZStack(alignment: .topTrailing) {
+                                                Image(uiImage: images[idx])
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 90, height: 90)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                                Button {
+                                                    images.remove(at: idx)
+                                                    selectedItems.remove(at: idx)
+                                                } label: {
+                                                    Image(systemName: "xmark.circle.fill")
+                                                        .foregroundStyle(Color.white, Color.black.opacity(0.5))
+                                                        .font(.system(size: 18))
+                                                }
+                                                .offset(x: 6, y: -6)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: cpGoldAccent.opacity(0.09), radius: 10, y: 3)
+                        )
+                        .padding(.horizontal, 24)
+
+                        // ── Tags card (optional) ─────────────────────────
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                Text("TAGS")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .tracking(1.8)
+                                    .foregroundColor(cpMutedGold)
+                                OptionalBadge()
+                            }
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(presetTags, id: \.self) { tag in
+                                        let on = selectedTags.contains(tag)
+                                        Button { toggleTag(tag) } label: {
+                                            Text("#\(tag)")
+                                                .font(.system(size: 13, weight: .medium))
+                                                .foregroundStyle(on ? Color.white : cpGoldAccent)
+                                                .padding(.horizontal, 13)
+                                                .padding(.vertical, 7)
+                                                .background {
+                                                    if on {
+                                                        Capsule().fill(cpGoldGradient)
+                                                    } else {
+                                                        Capsule().fill(Color.white)
+                                                            .overlay(Capsule().strokeBorder(cpGoldAccent, lineWidth: 1))
+                                                    }
+                                                }
+                                        }
+                                        .buttonStyle(.plain)
+                                        .animation(.easeInOut(duration: 0.12), value: on)
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+
+                            HStack(spacing: 10) {
+                                Image(systemName: "plus.circle")
+                                    .foregroundStyle(cpGoldAccent)
+                                    .font(.system(size: 16))
+                                TextField("add your own tag", text: $customTagInput)
+                                    .font(.system(size: 15))
+                                    .foregroundColor(cpBrownText)
+                                    .tint(cpGoldAccent)
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                                    .onSubmit { addCustomTag() }
+                                if !customTagInput.trimmingCharacters(in: .whitespaces).isEmpty {
+                                    Button("Add") { addCustomTag() }
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(cpGoldAccent)
+                                }
+                            }
+
+                            if !selectedTags.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(selectedTags, id: \.self) { tag in
+                                            HStack(spacing: 4) {
+                                                Text("#\(tag)")
+                                                    .font(.system(size: 13, weight: .medium))
+                                                Button {
+                                                    selectedTags.removeAll { $0 == tag }
+                                                } label: {
+                                                    Image(systemName: "xmark")
+                                                        .font(.system(size: 10, weight: .bold))
+                                                }
+                                            }
+                                            .foregroundStyle(Color(hex: "#8A7A55"))
+                                            .padding(.horizontal, 11)
+                                            .padding(.vertical, 6)
+                                            .background(Color(hex: "#F8EFD6"))
+                                            .clipShape(Capsule())
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: cpGoldAccent.opacity(0.09), radius: 10, y: 3)
+                        )
+                        .padding(.horizontal, 24)
+
+                        // ── Just for me toggle ───────────────────────────
+                        HStack(spacing: 14) {
+                            Image(systemName: onlyForMe ? "lock.fill" : "lock")
+                                .font(.system(size: 17, weight: .light))
+                                .foregroundStyle(cpGoldGradient)
+                                .frame(width: 24)
+                                .animation(.easeInOut(duration: 0.15), value: onlyForMe)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("just for me")
+                                    .font(.system(size: 15, weight: .regular))
+                                    .foregroundColor(cpBrownText)
+                                Text(onlyForMe ? "only you will see this" : "share with everyone here")
+                                    .font(.system(size: 13, weight: .light))
+                                    .foregroundColor(cpMutedGold)
+                                    .animation(.easeInOut(duration: 0.15), value: onlyForMe)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: $onlyForMe)
+                                .tint(cpGoldAccent)
+                                .labelsHidden()
+                                .scaleEffect(0.9)
+                        }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: cpGoldAccent.opacity(0.09), radius: 10, y: 3)
+                        )
+                        .padding(.horizontal, 24)
+
+                        // ── Footer note ──────────────────────────────────
+                        Text(onlyForMe
+                            ? "this stays safe with you — no one else will ever see it"
+                            : "this post will automatically be archived after 48 hours"
+                        )
+                        .font(.system(size: 13, weight: .light))
+                        .foregroundColor(cpMutedGold.opacity(0.85))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 4)
+                        .animation(.easeInOut(duration: 0.2), value: onlyForMe)
+
+                        Spacer(minLength: 40)
+                    }
+                    .padding(.top, 4)
+                }
+            }
+        }
+        .onChange(of: selectedItems) {
+            Task {
+                images = []
+                for item in selectedItems {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let uiImage = UIImage(data: data) {
+                        images.append(uiImage)
                     }
                 }
             }
@@ -201,7 +387,8 @@ struct CreatePostView: View {
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             bodyText: bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
             images: images,
-            tags: selectedTags
+            tags: selectedTags,
+            isPrivate: onlyForMe
         )
         isUploading = false
         dismiss()
@@ -226,6 +413,22 @@ struct CreatePostView: View {
         selectedTags.append(tag)
     }
 }
+
+// MARK: - Optional Badge
+
+private struct OptionalBadge: View {
+    var body: some View {
+        Text("optional")
+            .font(.system(size: 11, weight: .medium))
+            .tracking(0.3)
+            .foregroundColor(cpGoldAccent)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(cpGoldAccent.opacity(0.12)))
+    }
+}
+
+// MARK: - Preview
 
 #Preview {
     CreatePostView(app: AppState(authService: AuthService()))
