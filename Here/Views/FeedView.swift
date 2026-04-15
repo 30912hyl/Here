@@ -7,20 +7,23 @@ struct FeedView: View {
 
     var body: some View {
         if posts.isEmpty {
-            VStack(spacing: 16) {
-                Image(systemName: "heart")
-                    .font(.system(size: 40, weight: .thin))
-                    .foregroundStyle(LinearGradient(
-                        colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                Text("No posts yet.")
-                    .font(.system(size: 16, weight: .light))
-                    .foregroundColor(Color(hex: "#C4A55A"))
-                Text("Be the first to share.")
-                    .font(.system(size: 13, weight: .light))
-                    .foregroundColor(Color(hex: "#D4C5A0"))
+            ZStack {
+                StarryBackgroundView()
+                VStack(spacing: 16) {
+                    Image(systemName: "heart")
+                        .font(.system(size: 40, weight: .thin))
+                        .foregroundStyle(LinearGradient(
+                            colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                    Text("No posts yet.")
+                        .font(.system(size: 16, weight: .light))
+                        .foregroundColor(Color(hex: "#C4A55A"))
+                    Text("Be the first to share.")
+                        .font(.system(size: 13, weight: .light))
+                        .foregroundColor(Color(hex: "#D4C5A0"))
+                }
             }
         } else {
             ScrollView(.vertical, showsIndicators: false) {
@@ -50,6 +53,7 @@ struct SinglePostView: View {
     @State private var liked = false
     @State private var likeScale = 1.0
     @State private var showReport = false
+    @State private var selectedImageURL: String? = nil
 
     var goldGradient: LinearGradient {
         LinearGradient(
@@ -62,72 +66,46 @@ struct SinglePostView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                Color.white.ignoresSafeArea()
-                
-                // Background image if exists
-                if let firstURL = post.imageURLs.first, let url = URL(string: firstURL) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: geo.size.width, height: geo.size.height)
-                                .clipped()
-                                //.overlay(Color.white.opacity(0.15))
-                        case .failure:
-                            EmptyView()
-                        case .empty:
-                            //gradientFallback.overlay(ProgressView().tint(.white))
-                            EmptyView()
-                        @unknown default:
-                            EmptyView()
-                        }
-                    }
-                    .clipped()
-                }
-                
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(hex: "#F7E7CE"), location: 0.0),
+                        .init(color: Color(hex: "#FFFFFF"), location: 0.5)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+
+                StarryBackgroundView()
+
                 VStack(spacing: 0) {
-                    // Scrollable content area - centered
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 16) {
                             Text(post.title)
                                 .font(.system(size: 24, weight: .light))
                                 .foregroundColor(.black)
-                            
+
                             if !post.bodyText.isEmpty {
                                 Text(post.bodyText)
                                     .font(.system(size: 16, weight: .light))
                                     .foregroundColor(Color(hex: "#5C5C5C"))
                                     .lineSpacing(6)
                             }
-                            
-                            // Extra image thumbnails
-                            if post.imageURLs.count > 1 {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ForEach(post.imageURLs.dropFirst(), id: \.self) { urlString in
-                                            if let url = URL(string: urlString) {
-                                                AsyncImage(url: url) { image in
-                                                    image.resizable().scaledToFill()
-                                                } placeholder: {
-                                                    Color.gray.opacity(0.3)
-                                                }
-                                                .frame(width: 80, height: 80)
-                                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                            }
-                                        }
+
+                            if !post.imageURLs.isEmpty {
+                                ImageGridView(
+                                    imageURLs: post.imageURLs,
+                                    onImageTap: { urlString in
+                                        selectedImageURL = urlString
                                     }
-                                }
+                                )
                             }
                         }
                         .padding(.horizontal, 28)
                         .frame(minHeight: geo.size.height - 140, alignment: .center)
                     }
-                    
-                    // Action buttons — always pinned at bottom
+
                     HStack(spacing: 20) {
-                        // Like button
                         Button {
                             guard !liked else { return }
                             liked = true
@@ -157,8 +135,7 @@ struct SinglePostView: View {
                                     .foregroundColor(liked ? Color(hex: "#C9A84C") : Color(hex: "#D4C5A0"))
                             }
                         }
-                        
-                        // Chat button
+
                         Button {
                             onStartChat(post)
                         } label: {
@@ -175,10 +152,9 @@ struct SinglePostView: View {
                             .background(goldGradient)
                             .clipShape(Capsule())
                         }
-                        
+
                         Spacer()
-                        
-                        // Report menu
+
                         Menu {
                             Button(role: .destructive) {
                                 showReport = true
@@ -195,6 +171,14 @@ struct SinglePostView: View {
                     .padding(.vertical, 20)
                 }
             }
+            .fullScreenCover(item: Binding(
+                get: { selectedImageURL.map { FullScreenImageItem(url: $0) } },
+                set: { selectedImageURL = $0?.url }
+            )) { item in
+                FullScreenImageView(imageURL: item.url) {
+                    selectedImageURL = nil
+                }
+            }
         }
         .alert("Report this post?", isPresented: $showReport) {
             Button("Report", role: .destructive) { }
@@ -203,13 +187,113 @@ struct SinglePostView: View {
             Text("Thank you for helping keep this space safe.")
         }
     }
-//    private var gradientFallback: some View {
-//        LinearGradient(
-//            colors: [.black, Color(.darkGray)],
-//            startPoint: .topLeading,
-//            endPoint: .bottomTrailing
-//        )
-//    }
+}
+
+// MARK: - 图片网格（放大版）
+struct ImageGridView: View {
+    let imageURLs: [String]
+    let onImageTap: (String) -> Void
+
+    var body: some View {
+        let columns = [
+            GridItem(.flexible(), spacing: 12),
+            GridItem(.flexible(), spacing: 12)
+        ]
+
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(imageURLs, id: \.self) { urlString in
+                if let url = URL(string: urlString) {
+                    Button {
+                        onImageTap(urlString)
+                    } label: {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 160, height: 160)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            case .failure:
+                                Color.gray.opacity(0.3)
+                                    .frame(width: 160, height: 160)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .overlay(
+                                        Image(systemName: "photo")
+                                            .font(.system(size: 40))
+                                            .foregroundColor(.gray)
+                                    )
+                            case .empty:
+                                Color.gray.opacity(0.3)
+                                    .frame(width: 160, height: 160)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .overlay(ProgressView())
+                            @unknown default:
+                                EmptyView()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 全屏图片查看器
+struct FullScreenImageView: View {
+    let imageURL: String
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if let url = URL(string: imageURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    case .failure:
+                        VStack(spacing: 12) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 50))
+                                .foregroundColor(.white.opacity(0.5))
+                            Text("Failed to load image")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    case .empty:
+                        ProgressView()
+                            .tint(.white)
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(.white.opacity(0.8))
+                            .padding()
+                    }
+                }
+                Spacer()
+            }
+        }
+    }
+}
+
+// MARK: - 辅助类型
+struct FullScreenImageItem: Identifiable {
+    let id = UUID()
+    let url: String
 }
 
 #Preview {
