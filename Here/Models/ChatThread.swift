@@ -32,8 +32,9 @@ enum ContinueChoice: String, Codable {
     case no
 }
 
-struct ChatThread: Identifiable, Codable {
+struct ChatThread: Identifiable, Codable, Equatable {
     @DocumentID var id: String?
+    let postId: String?
     let postTitle: String
     let participants: [String]       // [uid1, uid2]
     let createdAt: Date
@@ -44,12 +45,14 @@ struct ChatThread: Identifiable, Codable {
 
     init(
         id: String? = nil,
+        postId: String? = nil,
         postTitle: String,
         participants: [String],
         createdAt: Date = Date(),
         ttlSeconds: TimeInterval = 24 * 60 * 60
     ) {
         self.id = id
+        self.postId = postId
         self.postTitle = postTitle
         self.participants = participants
         self.createdAt = createdAt

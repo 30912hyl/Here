@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FeedView: View {
     let posts: [Post]
+    let uid: String
     let onStartChat: (Post) -> Void
     let onLike: (String) -> Void
 
@@ -28,6 +29,7 @@ struct FeedView: View {
                     ForEach(posts) { post in
                         SinglePostView(
                             post: post,
+                            uid: uid,
                             onStartChat: onStartChat,
                             onLike: onLike
                         )
@@ -44,6 +46,7 @@ struct FeedView: View {
 // MARK: - Single Post
 struct SinglePostView: View {
     let post: Post
+    let uid: String
     let onStartChat: (Post) -> Void
     let onLike: (String) -> Void
 
@@ -158,22 +161,24 @@ struct SinglePostView: View {
                             }
                         }
                         
-                        // Chat button
-                        Button {
-                            onStartChat(post)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "bubble.left")
-                                    .font(.system(size: 14, weight: .light))
-                                Text("Chat privately")
-                                    .font(.system(size: 13, weight: .light))
-                                    .tracking(0.3)
+                        // Chat button — hidden on own posts
+                        if post.authorUID != uid {
+                            Button {
+                                onStartChat(post)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "bubble.left")
+                                        .font(.system(size: 14, weight: .light))
+                                    Text("Chat privately")
+                                        .font(.system(size: 13, weight: .light))
+                                        .tracking(0.3)
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 9)
+                                .background(goldGradient)
+                                .clipShape(Capsule())
                             }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 9)
-                            .background(goldGradient)
-                            .clipShape(Capsule())
                         }
                         
                         Spacer()
@@ -219,6 +224,7 @@ struct SinglePostView: View {
             Post(title: "Can't sleep", bodyText: "Anyone else up late thinking about everything?", authorUID: "preview"),
             Post(title: "New here", bodyText: "Just downloaded this app. Excited to connect.", authorUID: "preview")
         ],
+        uid: "preview",
         onStartChat: { _ in },
         onLike: { _ in }
     )

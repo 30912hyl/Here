@@ -110,12 +110,14 @@ struct ChatDetailView: View {
             Text("Thank you for helping keep this space safe.")
         }
     }
+    
 
     // MARK: - Input Bar
     private var chatInputBar: some View {
         HStack(spacing: 12) {
             TextField("", text: $input)
                 .font(.system(size: 15, weight: .light))
+                .foregroundColor(.black)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Color.white)

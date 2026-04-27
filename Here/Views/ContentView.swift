@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var lastNonCreateTab: MainTab = .feed
     @State private var showCreateSheet = false
     @State private var heartBeating = false
+    @State private var navigateToThreadId: String? = nil
 
     @StateObject private var app = AppState(authService: AuthService())
 
@@ -47,10 +48,13 @@ struct ContentView: View {
 
                 FeedView(
                     posts: app.posts,
+                    uid: app.uid,
                     onStartChat: { post in
                         Task {
-                            _ = await app.createThreadFromPost(post)
-                            selectedTab = .inbox
+                            if let threadId = await app.createThreadFromPost(post) {
+                                navigateToThreadId = threadId
+                                selectedTab = .inbox
+                            }
                         }
                     },
                     onLike: { id in
@@ -62,7 +66,7 @@ struct ContentView: View {
 
                 Color.clear.tag(MainTab.create)
 
-                InboxView(app: app)
+                InboxView(app: app, navigateToThreadId: $navigateToThreadId)
                     .tag(MainTab.inbox)
 
                 ProfileView()
