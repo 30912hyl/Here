@@ -2,12 +2,12 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var authService: AuthService
-    
+
     @State private var selectedTab: MainTab = .feed
-    @State private var lastNonCreateTab: MainTab = .feed
     @State private var showCreateSheet = false
     @State private var heartBeating = false
     @State private var navigateToThreadId: String? = nil
+    @State private var showTabBar = true
 
     @StateObject private var app = AppState(authService: AuthService())
 
@@ -25,6 +25,7 @@ struct ContentView: View {
                 app.authService = authService
                 app.startListening()
             }
+            KeyboardDismisser.install()
         }
         .onChange(of: authService.isSignedIn) {
             print("isSignedIn changed to: \(authService.isSignedIn)")
@@ -57,23 +58,32 @@ struct ContentView: View {
                             }
                         }
                     },
-                    onLike: { id in
-                        Task { await app.likePost(postId: id) }
+                    onToggleLike: { post, alreadyLiked in
+                        Task { await app.toggleLike(post: post, alreadyLiked: alreadyLiked) }
                     }
-                )
-                .tag(MainTab.feed)
-
-
-                Color.clear.tag(MainTab.create)
+                }
+            )
+            .tag(MainTab.feed)
 
                 InboxView(app: app, navigateToThreadId: $navigateToThreadId)
                     .tag(MainTab.inbox)
+            Color.clear.tag(MainTab.create)
 
-                ProfileView()
-                    .tag(MainTab.profile)
-            }
-            .toolbar(.hidden, for: .tabBar)
+            InboxView(app: app)
+                .tag(MainTab.inbox)
 
+            ProfileView()
+                .tag(MainTab.profile)
+        }
+        .toolbar(.hidden, for: .tabBar)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            withAnimation(.easeInOut(duration: 0.25)) { showTabBar = false }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeInOut(duration: 0.25)) { showTabBar = true }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+          if showTabBar {
             HStack(spacing: 0) {
                 CustomTabItem(
                     iconDefault: "waveform",
@@ -94,15 +104,11 @@ struct ContentView: View {
                     startHeartbeat()
                     showCreateSheet = true
                 } label: {
-                    ZStack {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 44, weight: .thin))
-                            .foregroundStyle(goldGradient)
-                            .shadow(color: Color(hex: "#C9A84C").opacity(0.4), radius: 6, y: 2)
-                            .scaleEffect(heartBeating ? 1.25 : 1.0)
-                    }
-                    .scaleEffect(heartBeating ? 1.25 : 1.0)
-                    
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 44, weight: .thin))
+                        .foregroundStyle(goldGradient)
+                        .shadow(color: Color(hex: "#C9A84C").opacity(0.4), radius: 6, y: 2)
+                        .scaleEffect(heartBeating ? 1.25 : 1.0)
                 }
                 .frame(maxWidth: .infinity)
 
@@ -124,6 +130,7 @@ struct ContentView: View {
             .padding(.horizontal, 12)
             .padding(.top, 8)
             .background(.ultraThinMaterial)
+          }
         }
         .sheet(isPresented: $showCreateSheet) {
             CreatePostView(onSubmit: { title, bodyText, images in
@@ -199,6 +206,29 @@ struct CustomTabItem: View {
             .frame(maxWidth: .infinity)
         }
         .animation(.easeInOut(duration: 0.2), value: isSelected)
+    }
+}
+
+// MARK: - Keyboard Dismisser
+private final class KeyboardDismisser: NSObject {
+    static let shared = KeyboardDismisser()
+
+    private static var isInstalled = false
+
+    static func install() {
+        guard !isInstalled else { return }
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) else { return }
+        let tap = UITapGestureRecognizer(target: shared, action: #selector(dismiss))
+        tap.cancelsTouchesInView = false
+        window.addGestureRecognizer(tap)
+        isInstalled = true
+    }
+
+    @objc private func dismiss() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 

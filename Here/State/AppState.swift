@@ -112,13 +112,16 @@ final class AppState: ObservableObject {
         }
     }
   
-    func likePost(postId: String) async {
+    func toggleLike(post: Post, alreadyLiked: Bool) async {
+        guard let postId = post.id, !uid.isEmpty else { return }
+        let countDelta = alreadyLiked ? (post.likeCount > 0 ? Int64(-1) : Int64(0)) : Int64(1)
         do {
             try await db.collection("posts").document(postId).updateData([
-                "likeCount": FieldValue.increment(Int64(1))
+                "likeCount": FieldValue.increment(countDelta),
+                "likedBy": alreadyLiked ? FieldValue.arrayRemove([uid]) : FieldValue.arrayUnion([uid])
             ])
         } catch {
-            print("Error liking post: \(error.localizedDescription)")
+            print("Error toggling like: \(error.localizedDescription)")
         }
     }
 
