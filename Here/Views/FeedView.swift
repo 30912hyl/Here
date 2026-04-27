@@ -4,7 +4,7 @@ struct FeedView: View {
     let posts: [Post]
     let uid: String
     let onStartChat: (Post) -> Void
-    let onToggleLike: (Post) -> Void
+    let onToggleLike: (Post, Bool) -> Void
 
     var body: some View {
         if posts.isEmpty {
@@ -48,12 +48,19 @@ struct SinglePostView: View {
     let post: Post
     let uid: String
     let onStartChat: (Post) -> Void
-    let onToggleLike: (Post) -> Void
+    let onToggleLike: (Post, Bool) -> Void
 
     @State private var likeScale = 1.0
     @State private var showReport = false
+    @State private var optimisticLiked: Bool? = nil
 
-    private var liked: Bool { post.likedBy.contains(uid) }
+    private var liked: Bool { optimisticLiked ?? post.likedBy.contains(uid) }
+    private var displayCount: Int {
+        guard let optimistic = optimisticLiked else { return post.likeCount }
+        let serverLiked = post.likedBy.contains(uid)
+        guard optimistic != serverLiked else { return post.likeCount }
+        return max(0, post.likeCount + (optimistic ? 1 : -1))
+    }
 
     var goldGradient: LinearGradient {
         LinearGradient(
@@ -131,13 +138,17 @@ struct SinglePostView: View {
                     HStack(spacing: 20) {
                         // Like button
                         Button {
-                            onToggleLike(post)
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
-                                likeScale = 1.4
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                    likeScale = 1.0
+                            let currentLiked = liked
+                            optimisticLiked = !currentLiked
+                            onToggleLike(post, currentLiked)
+                            if !currentLiked {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
+                                    likeScale = 1.4
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                        likeScale = 1.0
+                                    }
                                 }
                             }
                         } label: {
@@ -150,9 +161,12 @@ struct SinglePostView: View {
                                         : LinearGradient(colors: [Color(hex: "#D4C5A0")], startPoint: .top, endPoint: .bottom)
                                     )
                                     .scaleEffect(likeScale)
-                                Text("\(post.likeCount)")
+                                    .frame(width: 22)
+                                Text("\(displayCount)")
                                     .font(.system(size: 13, weight: .light))
+                                    .monospacedDigit()
                                     .foregroundColor(liked ? Color(hex: "#C9A84C") : Color(hex: "#D4C5A0"))
+                                    .frame(minWidth: 16, alignment: .leading)
                             }
                         }
 
@@ -194,6 +208,11 @@ struct SinglePostView: View {
                 }
             }
         }
+        .onChange(of: post.likedBy) {
+            if let optimistic = optimisticLiked, post.likedBy.contains(uid) == optimistic {
+                optimisticLiked = nil
+            }
+        }
         .alert("Report this post?", isPresented: $showReport) {
             Button("Report", role: .destructive) { }
             Button("Cancel", role: .cancel) { }
@@ -212,6 +231,6 @@ struct SinglePostView: View {
         ],
         uid: "preview",
         onStartChat: { _ in },
-        onToggleLike: { _ in }
+        onToggleLike: { _, _ in }
     )
 }

@@ -110,7 +110,7 @@ struct ChatDetailView: View {
 
     // MARK: - Input Bar
     private var chatInputBar: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .bottom, spacing: 12) {
             TextField("", text: $input, axis: .vertical)
                 .font(.system(size: 15, weight: .light))
                 .padding(.horizontal, 16)

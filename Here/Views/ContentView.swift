@@ -52,8 +52,8 @@ struct ContentView: View {
                         selectedTab = .inbox
                     }
                 },
-                onToggleLike: { post in
-                    Task { await app.toggleLike(post: post) }
+                onToggleLike: { post, alreadyLiked in
+                    Task { await app.toggleLike(post: post, alreadyLiked: alreadyLiked) }
                 }
             )
             .tag(MainTab.feed)
@@ -202,7 +202,10 @@ struct CustomTabItem: View {
 private final class KeyboardDismisser: NSObject {
     static let shared = KeyboardDismisser()
 
+    private static var isInstalled = false
+
     static func install() {
+        guard !isInstalled else { return }
         guard let window = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap({ $0.windows })
@@ -210,6 +213,7 @@ private final class KeyboardDismisser: NSObject {
         let tap = UITapGestureRecognizer(target: shared, action: #selector(dismiss))
         tap.cancelsTouchesInView = false
         window.addGestureRecognizer(tap)
+        isInstalled = true
     }
 
     @objc private func dismiss() {
