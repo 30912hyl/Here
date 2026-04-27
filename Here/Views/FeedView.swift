@@ -2,8 +2,9 @@ import SwiftUI
 
 struct FeedView: View {
     let posts: [Post]
+    let uid: String
     let onStartChat: (Post) -> Void
-    let onLike: (String) -> Void
+    let onToggleLike: (Post, Bool) -> Void
 
     var body: some View {
         if posts.isEmpty {
@@ -28,8 +29,9 @@ struct FeedView: View {
                     ForEach(posts) { post in
                         SinglePostView(
                             post: post,
+                            uid: uid,
                             onStartChat: onStartChat,
-                            onLike: onLike
+                            onToggleLike: onToggleLike
                         )
                         .containerRelativeFrame(.vertical)
                     }
@@ -44,12 +46,21 @@ struct FeedView: View {
 // MARK: - Single Post
 struct SinglePostView: View {
     let post: Post
+    let uid: String
     let onStartChat: (Post) -> Void
-    let onLike: (String) -> Void
+    let onToggleLike: (Post, Bool) -> Void
 
-    @State private var liked = false
     @State private var likeScale = 1.0
     @State private var showReport = false
+    @State private var optimisticLiked: Bool? = nil
+
+    private var liked: Bool { optimisticLiked ?? post.likedBy.contains(uid) }
+    private var displayCount: Int {
+        guard let optimistic = optimisticLiked else { return post.likeCount }
+        let serverLiked = post.likedBy.contains(uid)
+        guard optimistic != serverLiked else { return post.likeCount }
+        return max(0, post.likeCount + (optimistic ? 1 : -1))
+    }
 
     var goldGradient: LinearGradient {
         LinearGradient(
@@ -63,7 +74,7 @@ struct SinglePostView: View {
         GeometryReader { geo in
             ZStack {
                 Color.white.ignoresSafeArea()
-                
+
                 // Background image if exists
                 if let firstURL = post.imageURLs.first, let url = URL(string: firstURL) {
                     AsyncImage(url: url) { phase in
@@ -74,11 +85,9 @@ struct SinglePostView: View {
                                 .scaledToFill()
                                 .frame(width: geo.size.width, height: geo.size.height)
                                 .clipped()
-                                //.overlay(Color.white.opacity(0.15))
                         case .failure:
                             EmptyView()
                         case .empty:
-                            //gradientFallback.overlay(ProgressView().tint(.white))
                             EmptyView()
                         @unknown default:
                             EmptyView()
@@ -86,7 +95,7 @@ struct SinglePostView: View {
                     }
                     .clipped()
                 }
-                
+
                 VStack(spacing: 0) {
                     // Scrollable content area - centered
                     ScrollView(.vertical, showsIndicators: false) {
@@ -94,14 +103,14 @@ struct SinglePostView: View {
                             Text(post.title)
                                 .font(.system(size: 24, weight: .light))
                                 .foregroundColor(.black)
-                            
+
                             if !post.bodyText.isEmpty {
                                 Text(post.bodyText)
                                     .font(.system(size: 16, weight: .light))
                                     .foregroundColor(Color(hex: "#5C5C5C"))
                                     .lineSpacing(6)
                             }
-                            
+
                             // Extra image thumbnails
                             if post.imageURLs.count > 1 {
                                 ScrollView(.horizontal, showsIndicators: false) {
@@ -124,22 +133,22 @@ struct SinglePostView: View {
                         .padding(.horizontal, 28)
                         .frame(minHeight: geo.size.height - 140, alignment: .center)
                     }
-                    
+
                     // Action buttons — always pinned at bottom
                     HStack(spacing: 20) {
                         // Like button
                         Button {
-                            guard !liked else { return }
-                            liked = true
-                            if let postId = post.id {
-                                onLike(postId)
-                            }
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
-                                likeScale = 1.4
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                    likeScale = 1.0
+                            let currentLiked = liked
+                            optimisticLiked = !currentLiked
+                            onToggleLike(post, currentLiked)
+                            if !currentLiked {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
+                                    likeScale = 1.4
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                        likeScale = 1.0
+                                    }
                                 }
                             }
                         } label: {
@@ -152,12 +161,15 @@ struct SinglePostView: View {
                                         : LinearGradient(colors: [Color(hex: "#D4C5A0")], startPoint: .top, endPoint: .bottom)
                                     )
                                     .scaleEffect(likeScale)
-                                Text("\(post.likeCount)")
+                                    .frame(width: 22)
+                                Text("\(displayCount)")
                                     .font(.system(size: 13, weight: .light))
+                                    .monospacedDigit()
                                     .foregroundColor(liked ? Color(hex: "#C9A84C") : Color(hex: "#D4C5A0"))
+                                    .frame(minWidth: 16, alignment: .leading)
                             }
                         }
-                        
+
                         // Chat button
                         Button {
                             onStartChat(post)
@@ -175,9 +187,9 @@ struct SinglePostView: View {
                             .background(goldGradient)
                             .clipShape(Capsule())
                         }
-                        
+
                         Spacer()
-                        
+
                         // Report menu
                         Menu {
                             Button(role: .destructive) {
@@ -196,6 +208,11 @@ struct SinglePostView: View {
                 }
             }
         }
+        .onChange(of: post.likedBy) {
+            if let optimistic = optimisticLiked, post.likedBy.contains(uid) == optimistic {
+                optimisticLiked = nil
+            }
+        }
         .alert("Report this post?", isPresented: $showReport) {
             Button("Report", role: .destructive) { }
             Button("Cancel", role: .cancel) { }
@@ -203,13 +220,6 @@ struct SinglePostView: View {
             Text("Thank you for helping keep this space safe.")
         }
     }
-//    private var gradientFallback: some View {
-//        LinearGradient(
-//            colors: [.black, Color(.darkGray)],
-//            startPoint: .topLeading,
-//            endPoint: .bottomTrailing
-//        )
-//    }
 }
 
 #Preview {
@@ -219,7 +229,8 @@ struct SinglePostView: View {
             Post(title: "Can't sleep", bodyText: "Anyone else up late thinking about everything?", authorUID: "preview"),
             Post(title: "New here", bodyText: "Just downloaded this app. Excited to connect.", authorUID: "preview")
         ],
+        uid: "preview",
         onStartChat: { _ in },
-        onLike: { _ in }
+        onToggleLike: { _, _ in }
     )
 }
