@@ -28,7 +28,7 @@ private let cpGoldGradient = LinearGradient(
 
 struct CreatePostView: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var app: AppState
+    let onSubmit: (String, String, [UIImage], [String], Bool) async -> Void     
 
     @State private var title = ""
     @State private var bodyText = ""
@@ -383,12 +383,12 @@ struct CreatePostView: View {
 
     private func submitPost() async {
         isUploading = true
-        await app.addPost(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            bodyText: bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
-            images: images,
-            tags: selectedTags,
-            isPrivate: onlyForMe
+        await onSubmit( // title, bodyText, images, tags, isPrivate
+            title.trimmingCharacters(in: .whitespacesAndNewlines),
+            bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
+            images,
+            selectedTags,
+            onlyForMe
         )
         isUploading = false
         dismiss()
@@ -431,5 +431,5 @@ private struct OptionalBadge: View {
 // MARK: - Preview
 
 #Preview {
-    CreatePostView(app: AppState(authService: AuthService()))
+    CreatePostView(onSubmit: { _, _, _ in })
 }

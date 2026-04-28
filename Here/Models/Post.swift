@@ -19,6 +19,7 @@ struct Post: Identifiable, Codable {
     var likeCount: Int
     var tags: [String]
     var isPrivate: Bool
+    var likedBy: [String]
 
     init(
         id: String? = nil,
@@ -30,6 +31,7 @@ struct Post: Identifiable, Codable {
         likeCount: Int = 0,
         tags: [String] = [],
         isPrivate: Bool = false
+        likedBy: [String] = []
     ) {
         self.id = id
         self.title = title
@@ -41,6 +43,7 @@ struct Post: Identifiable, Codable {
         self.likeCount = likeCount
         self.tags = tags
         self.isPrivate = isPrivate
+        self.likedBy = likedBy
     }
     // Custom Codable decoder so that Firestore documents created before the `tags`
     // field was added can still decode successfully (falls back to an empty array).
@@ -51,14 +54,16 @@ struct Post: Identifiable, Codable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        title     = try  c.decode(String.self,    forKey: .title)
-        bodyText  = (try? c.decode(String.self,   forKey: .bodyText))  ?? ""
-        imageURLs = (try? c.decode([String].self, forKey: .imageURLs)) ?? []
-        authorUID = try  c.decode(String.self,    forKey: .authorUID)
-        createdAt = try  c.decode(Date.self,      forKey: .createdAt)
-        expiresAt = try  c.decode(Date.self,      forKey: .expiresAt)
-        likeCount = (try? c.decode(Int.self,      forKey: .likeCount)) ?? 0
-        tags      = (try? c.decode([String].self, forKey: .tags))      ?? []
-        isPrivate = (try? c.decode(Bool.self,     forKey: .isPrivate)) ?? false
+        _id       = try c.decode(DocumentID<String>.self, forKey: .id)
+        title     = try c.decode(String.self, forKey: .title)
+        bodyText  = try c.decodeIfPresent(String.self, forKey: .bodyText) ?? ""
+        imageURLs = try c.decodeIfPresent([String].self, forKey: .imageURLs) ?? []
+        authorUID = try c.decode(String.self, forKey: .authorUID)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        expiresAt = try c.decode(Date.self, forKey: .expiresAt)
+        likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount) ?? 0
+        tags      = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        isPrivate = try c.decodeIfPresent(Bool.self, forKey: .isPrivate) ?? false
+        likedBy   = try c.decodeIfPresent([String].self, forKey: .likedBy) ?? []
     }
 }

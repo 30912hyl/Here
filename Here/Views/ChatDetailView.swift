@@ -32,29 +32,25 @@ struct ChatDetailView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.white.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(spacing: 10) {
-                            ForEach(messages) { m in
-                                MessageBubble(message: m, uid: uid)
-                                    .id(m.id)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                    }
-                    .defaultScrollAnchor(.bottom)              
-                    .onChange(of: messages.count) {
-                        if let lastId = messages.last?.id {
-                            withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
-                        }
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 10) {
+                    ForEach(messages) { m in
+                        MessageBubble(message: m, uid: uid)
+                            .id(m.id)
                     }
                 }
-
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+            }
+            .defaultScrollAnchor(.bottom)
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: messages.count) {
+                if let lastId = messages.last?.id {
+                    withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 if !frozen {
                     chatInputBar
                 } else {
@@ -62,6 +58,7 @@ struct ChatDetailView: View {
                 }
             }
         }
+        .background(Color.white.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.white, for: .navigationBar)
         .toolbar {
@@ -115,18 +112,20 @@ struct ChatDetailView: View {
             Text("Thank you for helping keep this space safe.")
         }
     }
+    
 
     // MARK: - Input Bar
     private var chatInputBar: some View {
-        HStack(spacing: 12) {
-            TextField("", text: $input)
+        HStack(alignment: .bottom, spacing: 12) {
+            TextField("", text: $input, axis: .vertical)
                 .font(.system(size: 15, weight: .light))
+                .foregroundColor(.black)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Color.white)
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .overlay(
-                    Capsule()
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .stroke(Color(hex: "#E8E0CC"), lineWidth: 1)
                 )
 

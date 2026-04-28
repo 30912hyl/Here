@@ -134,13 +134,16 @@ final class AppState: ObservableObject {
         }
     }
   
-    func likePost(postId: String) async {
+    func toggleLike(post: Post, alreadyLiked: Bool) async {
+        guard let postId = post.id, !uid.isEmpty else { return }
+        let countDelta = alreadyLiked ? (post.likeCount > 0 ? Int64(-1) : Int64(0)) : Int64(1)
         do {
             try await db.collection("posts").document(postId).updateData([
-                "likeCount": FieldValue.increment(Int64(1))
+                "likeCount": FieldValue.increment(countDelta),
+                "likedBy": alreadyLiked ? FieldValue.arrayRemove([uid]) : FieldValue.arrayUnion([uid])
             ])
         } catch {
-            print("Error liking post: \(error.localizedDescription)")
+            print("Error toggling like: \(error.localizedDescription)")
         }
     }
 
@@ -152,7 +155,18 @@ final class AppState: ObservableObject {
         // Don't chat with yourself
         guard post.authorUID != uid else { return nil }
 
+        // Return existing active thread for this specific post if one exists
+        if let existing = threads.first(where: {
+            !$0.isFrozen() &&
+            $0.postId == post.id &&
+            $0.participants.contains(uid) &&
+            $0.participants.contains(post.authorUID)
+        }) {
+            return existing.id
+        }
+
         let thread = ChatThread(
+            postId: post.id,
             postTitle: post.title,
             participants: [uid, post.authorUID]
         )
