@@ -3,12 +3,23 @@ import SwiftUI
 
 struct InboxView: View {
     @ObservedObject var app: AppState
+    @Binding var navigateToThreadId: String?
+
+    @State private var navigationPath = NavigationPath()
 
     var activeThreads: [ChatThread] { app.threads.filter { !$0.isFrozen() } }
     var endedThreads: [ChatThread] { app.threads.filter { $0.isFrozen() } }
 
+    private func tryNavigate() {
+        guard let threadId = navigateToThreadId,
+              app.threads.contains(where: { $0.id == threadId }) else { return }
+        navigationPath = NavigationPath()
+        navigationPath.append(threadId)
+        navigateToThreadId = nil
+    }
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             List {
                 if app.threads.isEmpty {
                     Text("No conversations yet.")
@@ -18,9 +29,7 @@ struct InboxView: View {
                 } else {
                     if !activeThreads.isEmpty {
                         ForEach(activeThreads) { thread in
-                            NavigationLink {
-                                ChatDetailView(thread: thread, app: app)
-                            } label: {
+                            NavigationLink(value: thread.id ?? "") {
                                 ThreadCard(thread: thread, isEnded: false, app: app)
                             }
                             .listRowBackground(Color.white)
@@ -31,21 +40,26 @@ struct InboxView: View {
                     // Ended
                     if !endedThreads.isEmpty {
                         ForEach(endedThreads) { thread in
-                            NavigationLink {
-                               ChatDetailView(thread: thread, app: app)
-                            } label: {
+                            NavigationLink(value: thread.id ?? "") {
                                 ThreadCard(thread: thread, isEnded: true, app: app)
                             }
                             .listRowBackground(Color.white)
                             .listRowSeparator(.hidden)
                         }
                     }
-                } 
+                }
             }
             .listStyle(.plain)
             .background(Color.white)
             .navigationTitle("Chats")
-        } 
+            .navigationDestination(for: String.self) { threadId in
+                if let thread = app.threads.first(where: { $0.id == threadId }) {
+                    ChatDetailView(thread: thread, app: app)
+                }
+            }
+        }
+        .onChange(of: navigateToThreadId) { tryNavigate() }
+        .onChange(of: app.threads) { tryNavigate() }
     }
 }
 
@@ -136,5 +150,5 @@ struct ThreadCard: View {
 //             onManualFreeze: { _ in }
 //         )
 //     }
-    InboxView(app: AppState(authService: AuthService()))
+    InboxView(app: AppState(authService: AuthService()), navigateToThreadId: .constant(nil))
 }

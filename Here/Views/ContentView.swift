@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var selectedTab: MainTab = .feed
     @State private var showCreateSheet = false
     @State private var heartBeating = false
+    @State private var navigateToThreadId: String? = nil
     @State private var showTabBar = true
 
     @StateObject private var app = AppState(authService: AuthService())
@@ -39,33 +40,38 @@ struct ContentView: View {
     }
 
     private var mainTabView: some View {
-        TabView(selection: $selectedTab) {
-            VoiceView()
-                .tag(MainTab.voice)
+        ZStack(alignment: .bottom) {
+            Color.black.ignoresSafeArea()
 
-            FeedView(
-                posts: app.posts,
-                uid: app.uid,
-                onStartChat: { post in
-                    Task {
-                        _ = await app.createThreadFromPost(post)
-                        selectedTab = .inbox
+            TabView(selection: $selectedTab) {
+                VoiceView()
+                    .tag(MainTab.voice)
+
+                FeedView(
+                    posts: app.posts,
+                    uid: app.uid,
+                    onStartChat: { post in
+                        Task {
+                            if let threadId = await app.createThreadFromPost(post) {
+                                navigateToThreadId = threadId
+                                selectedTab = .inbox
+                            }
+                        }
+                    },
+                    onToggleLike: { post, alreadyLiked in
+                        Task { await app.toggleLike(post: post, alreadyLiked: alreadyLiked) }
                     }
-                },
-                onToggleLike: { post, alreadyLiked in
-                    Task { await app.toggleLike(post: post, alreadyLiked: alreadyLiked) }
-                }
-            )
-            .tag(MainTab.feed)
+                )
+                .tag(MainTab.feed)
 
-            Color.clear.tag(MainTab.create)
+                Color.clear.tag(MainTab.create)
 
-            InboxView(app: app)
-                .tag(MainTab.inbox)
+                InboxView(app: app, navigateToThreadId: $navigateToThreadId)
+                    .tag(MainTab.inbox)
 
-            ProfileView()
-                .tag(MainTab.profile)
-        }
+                ProfileView()
+                    .tag(MainTab.profile)
+            }
         .toolbar(.hidden, for: .tabBar)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             withAnimation(.easeInOut(duration: 0.25)) { showTabBar = false }
@@ -124,8 +130,11 @@ struct ContentView: View {
           }
         }
         .sheet(isPresented: $showCreateSheet) {
-            CreatePostView(app: app)
-                .presentationCornerRadius(28)
+            CreatePostView(onSubmit: { title, bodyText, images in
+                await app.addPost(title: title, bodyText: bodyText, images: images)
+            })
+            .presentationCornerRadius(28)
+        }
         }
     }
 
