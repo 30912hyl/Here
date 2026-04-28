@@ -61,20 +61,17 @@ struct ContentView: View {
                     onToggleLike: { post, alreadyLiked in
                         Task { await app.toggleLike(post: post, alreadyLiked: alreadyLiked) }
                     }
-                }
-            )
-            .tag(MainTab.feed)
+                )
+                .tag(MainTab.feed)
+
+                Color.clear.tag(MainTab.create)
 
                 InboxView(app: app, navigateToThreadId: $navigateToThreadId)
                     .tag(MainTab.inbox)
-            Color.clear.tag(MainTab.create)
 
-            InboxView(app: app)
-                .tag(MainTab.inbox)
-
-            ProfileView()
-                .tag(MainTab.profile)
-        }
+                ProfileView()
+                    .tag(MainTab.profile)
+            }
         .toolbar(.hidden, for: .tabBar)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             withAnimation(.easeInOut(duration: 0.25)) { showTabBar = false }
@@ -137,6 +134,7 @@ struct ContentView: View {
                 await app.addPost(title: title, bodyText: bodyText, images: images)
             })
             .presentationCornerRadius(28)
+        }
         }
     }
 
