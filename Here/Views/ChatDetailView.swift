@@ -64,10 +64,15 @@ struct ChatDetailView: View {
         .toolbar {
             // Nickname in gold as title
             ToolbarItem(placement: .principal) {
-                Text(thread.postTitle)
-                    .font(.system(size: 16, weight: .light))
-                    .tracking(0.5)
-                    .foregroundStyle(goldGradient)
+                VStack(spacing: 2) {
+                    Text(thread.nickname)
+                        .font(.system(size: 15, weight: .regular))
+                        .tracking(0.3)
+                        .foregroundStyle(goldGradient)
+                    Text("re: \(thread.postTitle)")
+                        .font(.system(size: 11, weight: .light))
+                        .foregroundColor(Color(hex: "#C4B89A"))
+                }
             }
 
             // Help menu

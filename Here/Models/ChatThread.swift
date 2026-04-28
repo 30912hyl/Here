@@ -42,6 +42,7 @@ struct ChatThread: Identifiable, Codable, Equatable {
     var isManuallyFrozen: Bool
     var hasExtendedOnce: Bool
     var continueChoices: [String: String]  // [uid: "undecided"/"yes"/"no"]
+    var nickname: String
 
     init(
         id: String? = nil,
@@ -49,7 +50,8 @@ struct ChatThread: Identifiable, Codable, Equatable {
         postTitle: String,
         participants: [String],
         createdAt: Date = Date(),
-        ttlSeconds: TimeInterval = 24 * 60 * 60
+        ttlSeconds: TimeInterval = 24 * 60 * 60,
+        nickname: String = ChatThread.generateNickname()
     ) {
         self.id = id
         self.postId = postId
@@ -59,12 +61,28 @@ struct ChatThread: Identifiable, Codable, Equatable {
         self.expiresAt = createdAt.addingTimeInterval(ttlSeconds)
         self.isManuallyFrozen = false
         self.hasExtendedOnce = false
-        // Both start undecided
+        self.nickname = nickname
         var choices: [String: String] = [:]
         for uid in participants {
             choices[uid] = ContinueChoice.undecided.rawValue
         }
         self.continueChoices = choices
+    }
+
+    static func generateNickname() -> String {
+        let adjectives = [
+            "gentle", "quiet", "golden", "soft", "silver", "wandering",
+            "tender", "warm", "still", "amber", "velvet", "calm",
+            "bright", "wild", "dawn", "misty", "warm", "rosy", "early"
+        ]
+        let nouns = [
+            "moon", "rain", "river", "spark", "echo", "bloom",
+            "mist", "light", "cloud", "ember", "tide", "rose",
+            "leaf", "song", "sky", "field", "flame", "shore"
+        ]
+        let adj  = adjectives.randomElement() ?? "quiet"
+        let noun = nouns.randomElement()      ?? "moon"
+        return "\(adj) \(noun)"
     }
     
     func isExpired(now: Date = Date()) -> Bool {
@@ -86,6 +104,24 @@ struct ChatThread: Identifiable, Codable, Equatable {
 
     var bothSaidYes: Bool {
         continueChoices.values.allSatisfy { $0 == ContinueChoice.yes.rawValue }
+    }
+
+    // Custom decoder so old Firestore documents without `nickname` still decode.
+    enum CodingKeys: String, CodingKey {
+        case postTitle, participants, createdAt, expiresAt
+        case isManuallyFrozen, hasExtendedOnce, continueChoices, nickname
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        postTitle        = try  c.decode(String.self,             forKey: .postTitle)
+        participants     = try  c.decode([String].self,           forKey: .participants)
+        createdAt        = try  c.decode(Date.self,               forKey: .createdAt)
+        expiresAt        = try  c.decode(Date.self,               forKey: .expiresAt)
+        isManuallyFrozen = (try? c.decode(Bool.self,             forKey: .isManuallyFrozen)) ?? false
+        hasExtendedOnce  = (try? c.decode(Bool.self,             forKey: .hasExtendedOnce))  ?? false
+        continueChoices  = (try? c.decode([String: String].self, forKey: .continueChoices))  ?? [:]
+        nickname         = (try? c.decode(String.self,           forKey: .nickname))          ?? ChatThread.generateNickname()
     }
 }
 

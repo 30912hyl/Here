@@ -83,9 +83,29 @@ final class AppState: ObservableObject {
             }
     }
 
+    // MARK: - Tags
+
+    struct TagCount: Identifiable {
+        var id: String { tag }
+        let tag: String
+        let count: Int
+    }
+
+    func topTags() -> [TagCount] {
+        var freq: [String: Int] = [:]
+        for post in posts {
+            for tag in post.tags {
+                freq[tag, default: 0] += 1
+            }
+        }
+        return freq
+            .map { TagCount(tag: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+    }
+
     // MARK: - Posts
 
-    func addPost(title: String, bodyText: String, images: [UIImage]) async {
+    func addPost(title: String, bodyText: String, images: [UIImage], tags: [String] = [], isPrivate: Bool = false) async {
         do {
             // Upload images first
             var imageURLs: [String] = []
@@ -102,7 +122,9 @@ final class AppState: ObservableObject {
                 title: title,
                 bodyText: bodyText,
                 imageURLs: imageURLs,
-                authorUID: uid
+                authorUID: uid,
+                tags: tags.map { $0.lowercased() },
+                isPrivate: isPrivate
             )
 
             try db.collection("posts").addDocument(from: post)

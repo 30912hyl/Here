@@ -37,7 +37,6 @@ struct InboxView: View {
                         }
                     }
 
-                    // Ended
                     if !endedThreads.isEmpty {
                         ForEach(endedThreads) { thread in
                             NavigationLink(value: thread.id ?? "") {
@@ -51,7 +50,7 @@ struct InboxView: View {
             }
             .listStyle(.plain)
             .background(Color.white)
-            .navigationTitle("Chats")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { threadId in
                 if let thread = app.threads.first(where: { $0.id == threadId }) {
                     ChatDetailView(thread: thread, app: app)
@@ -69,7 +68,6 @@ struct ThreadCard: View {
     let isEnded: Bool
     @ObservedObject var app: AppState
 
-    // 假设未读数，之后可以加到 ChatThread model 里
     let unreadCount: Int = 0
 
     var lastMessage: String {
@@ -87,7 +85,6 @@ struct ThreadCard: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            // 左侧金色竖线
             RoundedRectangle(cornerRadius: 2)
                 .fill(isEnded
                       ? LinearGradient(colors: [Color(hex: "#E8E0CC")], startPoint: .top, endPoint: .bottom)
@@ -96,9 +93,13 @@ struct ThreadCard: View {
                 .frame(width: 2, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(thread.postTitle)
+                Text(thread.nickname)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(isEnded ? Color(hex: "#C4B89A") : Color(hex: "#2C2416"))
+
+                Text("re: \(thread.postTitle)")
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundColor(isEnded ? Color(hex: "#D4C9B0") : Color(hex: "#C4B89A"))
 
                 Text(lastMessage)
                     .font(.system(size: 13, weight: .light))
@@ -108,7 +109,6 @@ struct ThreadCard: View {
 
             Spacer()
 
-            // 未读角标 / ended标记
             if isEnded {
                 Text("ended")
                     .font(.system(size: 10, weight: .light))
@@ -130,25 +130,6 @@ struct ThreadCard: View {
     }
 }
 
-
-
 #Preview {
-//     NavigationStack {
-//         InboxView(
-//             threads: .constant([
-//                 ChatThread(title: "Wandering Soul", messages: [
-//                     ChatMessage(text: "hey, your post really resonated with me", isMe: false)
-//                 ], ttlSeconds: AppState.chatTTL),
-//                 ChatThread(title: "Quiet Rain", messages: [
-//                     ChatMessage(text: "thank you for listening", isMe: true)
-//                 ], ttlSeconds: 0, isManuallyFrozen: true)
-//             ]),
-//             isFrozenNow: { thread in
-//                 thread.isManuallyFrozen || Date() >= thread.expiresAt
-//             },
-//             onSend: { _, _ in },
-//             onManualFreeze: { _ in }
-//         )
-//     }
     InboxView(app: AppState(authService: AuthService()), navigateToThreadId: .constant(nil))
 }
