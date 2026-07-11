@@ -48,7 +48,8 @@ struct ContentView: View {
                     .tag(MainTab.voice)
 
                 FeedView(
-                    posts: app.posts,
+                    posts: app.posts.filter { !$0.isPrivate || $0.authorUID == app.uid },
+                    tags: app.topTags(),
                     uid: app.uid,
                     onStartChat: { post in
                         Task {
@@ -129,11 +130,10 @@ struct ContentView: View {
             .background(.ultraThinMaterial)
           }
         }
-        .sheet(isPresented: $showCreateSheet) {
-            CreatePostView(onSubmit: { title, bodyText, images in
-                await app.addPost(title: title, bodyText: bodyText, images: images)
+        .fullScreenCover(isPresented: $showCreateSheet) {
+            CreatePostView(onSubmit: { title, bodyText, images, tags, isPrivate in
+                await app.addPost(title: title, bodyText: bodyText, images: images, tags: tags, isPrivate: isPrivate)
             })
-            .presentationCornerRadius(28)
         }
         }
     }
@@ -156,7 +156,7 @@ struct ContentView: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+            colors: [Color(hex: "#EDD9A3"), Color(hex: "#E8C870"), Color(hex: "#D4A840")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -243,7 +243,3 @@ extension Color {
     }
 }
 
-#Preview {
-    ContentView()
-        .environmentObject(AuthService())
-}

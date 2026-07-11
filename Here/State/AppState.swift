@@ -1,10 +1,9 @@
 import SwiftUI
 import FirebaseFirestore
-import Combine
 
 @MainActor
 final class AppState: ObservableObject {
-    static let chatTTL: TimeInterval = 24 * 60 * 60
+    static let chatTTL: TimeInterval = 48 * 60 * 60
 
     private let db = Firestore.firestore()
     private var postsListener: ListenerRegistration?
@@ -35,6 +34,7 @@ final class AppState: ObservableObject {
         threadsListener?.remove()
         messageListeners.values.forEach { $0.remove() }
         messageListeners.removeAll()
+        messages.removeAll()
     }
 
     private func listenToPosts() {
@@ -83,9 +83,31 @@ final class AppState: ObservableObject {
             }
     }
 
+    // MARK: - Tags
+
+    struct TagCount: Identifiable {
+        var id: String { tag }
+        let tag: String
+        let count: Int
+    }
+
+    func topTags() -> [TagCount] {
+        var freq: [String: Int] = [:]
+        // Skip other users' private posts so their tags don't leak into the tag bar
+        for post in posts where !post.isPrivate || post.authorUID == uid {
+            for tag in post.tags {
+                freq[tag, default: 0] += 1
+            }
+        }
+        return freq
+            .map { TagCount(tag: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+    }
+
     // MARK: - Posts
 
-    func addPost(title: String, bodyText: String, images: [UIImage]) async {
+    func addPost(title: String, bodyText: String, images: [UIImage], tags: [String] = [], isPrivate: Bool = false) async {
+        guard !uid.isEmpty else { return }
         do {
             // Upload images first
             var imageURLs: [String] = []
@@ -102,7 +124,9 @@ final class AppState: ObservableObject {
                 title: title,
                 bodyText: bodyText,
                 imageURLs: imageURLs,
-                authorUID: uid
+                authorUID: uid,
+                tags: tags.map { $0.lowercased() },
+                isPrivate: isPrivate
             )
 
             try db.collection("posts").addDocument(from: post)
@@ -211,20 +235,22 @@ final class AppState: ObservableObject {
     }
 
     private func checkAndExtendThread(threadId: String) async {
-        guard let thread = threads.first(where: { $0.id == threadId }),
-              thread.bothSaidYes,
-              !thread.hasExtendedOnce,
-              !thread.isManuallyFrozen else { return }
-
-        let newExpiry = Date().addingTimeInterval(Self.chatTTL)
-
-        // Reset choices and extend
-        var resetChoices: [String: String] = [:]
-        for uid in thread.participants {
-            resetChoices[uid] = ContinueChoice.undecided.rawValue
-        }
-
         do {
+            // Read fresh from Firestore to avoid stale local state race condition
+            let snap = try await db.collection("threads").document(threadId).getDocument()
+            let thread = try snap.data(as: ChatThread.self)
+            guard thread.bothSaidYes,
+                  !thread.hasExtendedOnce,
+                  !thread.isManuallyFrozen else { return }
+
+            let newExpiry = Date().addingTimeInterval(Self.chatTTL)
+
+            // Reset choices and extend
+            var resetChoices: [String: String] = [:]
+            for uid in thread.participants {
+                resetChoices[uid] = ContinueChoice.undecided.rawValue
+            }
+
             try await db.collection("threads").document(threadId).updateData([
                 "expiresAt": Timestamp(date: newExpiry),
                 "hasExtendedOnce": true,
@@ -233,7 +259,7 @@ final class AppState: ObservableObject {
 
             // Add system message
             let msg = ChatMessage(
-                text: "Conversation continued for 24 hours.",
+                text: "Conversation continued for 48 hours.",
                 senderUID: "system"
             )
             try db.collection("threads").document(threadId)
