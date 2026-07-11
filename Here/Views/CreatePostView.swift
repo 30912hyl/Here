@@ -28,7 +28,7 @@ private let cpGoldGradient = LinearGradient(
 
 struct CreatePostView: View {
     @Environment(\.dismiss) private var dismiss
-    let onSubmit: (String, String, [UIImage], [String]) async -> Void
+    let onSubmit: (String, String, [UIImage], [String], Bool) async -> Void
 
     @State private var title = ""
     @State private var bodyText = ""
@@ -37,6 +37,7 @@ struct CreatePostView: View {
     @State private var isUploading = false
     @State private var tags: [String] = []
     @State private var tagInput = ""
+    @State private var onlyForMe = false
 
     private let presetTags = ["😄", "😢", "🥰", "😡", "😴", "🍚", "☕️", "🎮", "🎵", "✨"]
     private let maxTags = 10
@@ -73,7 +74,7 @@ struct CreatePostView: View {
                         Button {
                             Task { await submitPost() }
                         } label: {
-                            Text("Share")
+                            Text(onlyForMe ? "Save" : "Share")
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundColor(isValid ? .white : cpMutedGold)
                                 .padding(.horizontal, 22)
@@ -317,13 +318,51 @@ struct CreatePostView: View {
                         )
                         .padding(.horizontal, 24)
 
+                        // ── Just for me toggle ───────────────────────────
+                        HStack(spacing: 14) {
+                            Image(systemName: onlyForMe ? "lock.fill" : "lock")
+                                .font(.system(size: 17, weight: .light))
+                                .foregroundStyle(cpGoldGradient)
+                                .frame(width: 24)
+                                .animation(.easeInOut(duration: 0.15), value: onlyForMe)
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("just for me")
+                                    .font(.system(size: 15, weight: .regular))
+                                    .foregroundColor(cpBrownText)
+                                Text(onlyForMe ? "only you will see this" : "share with everyone here")
+                                    .font(.system(size: 13, weight: .light))
+                                    .foregroundColor(cpMutedGold)
+                                    .animation(.easeInOut(duration: 0.15), value: onlyForMe)
+                            }
+
+                            Spacer()
+
+                            Toggle("", isOn: $onlyForMe)
+                                .tint(cpGoldAccent)
+                                .labelsHidden()
+                                .scaleEffect(0.9)
+                        }
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.white)
+                                .shadow(color: cpGoldAccent.opacity(0.09), radius: 10, y: 3)
+                        )
+                        .padding(.horizontal, 24)
+
                         // ── Footer note ──────────────────────────────────
-                        Text("this post will automatically be archived after 48 hours")
+                        Text(onlyForMe
+                            ? "this stays safe with you — no one else will ever see it"
+                            : "this post will automatically be archived after 48 hours"
+                        )
                             .font(.system(size: 13, weight: .light))
                             .foregroundColor(cpMutedGold.opacity(0.85))
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.horizontal, 24)
                             .padding(.top, 4)
+                            .animation(.easeInOut(duration: 0.2), value: onlyForMe)
 
                         Spacer(minLength: 40)
                     }
@@ -350,7 +389,8 @@ struct CreatePostView: View {
             title.trimmingCharacters(in: .whitespacesAndNewlines),
             bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
             images,
-            tags
+            tags,
+            onlyForMe
         )
         isUploading = false
         dismiss()
@@ -393,5 +433,5 @@ private struct OptionalBadge: View {
 // MARK: - Preview
 
 #Preview {
-    CreatePostView(onSubmit: { _, _, _, _ in })
+    CreatePostView(onSubmit: { _, _, _, _, _ in })
 }

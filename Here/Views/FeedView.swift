@@ -2,8 +2,9 @@ import SwiftUI
 
 struct FeedView: View {
     let posts: [Post]
+    let uid: String
     let onStartChat: (Post) -> Void
-    let onLike: (String) -> Void
+    let onToggleLike: (Post, Bool) -> Void
 
     @State private var selectedTag: String? = nil
     @State private var showAllTags = false
@@ -55,8 +56,9 @@ struct FeedView: View {
                         ForEach(filteredPosts) { post in
                             SinglePostView(
                                 post: post,
+                                uid: uid,
                                 onStartChat: onStartChat,
-                                onLike: onLike
+                                onToggleLike: onToggleLike
                             )
                             .containerRelativeFrame(.vertical)
                         }
@@ -256,13 +258,22 @@ struct EmojiTagPill: View {
 // MARK: - Single Post
 struct SinglePostView: View {
     let post: Post
+    let uid: String
     let onStartChat: (Post) -> Void
-    let onLike: (String) -> Void
+    let onToggleLike: (Post, Bool) -> Void
 
-    @State private var liked = false
     @State private var likeScale = 1.0
     @State private var showReport = false
     @State private var selectedImageURL: String? = nil
+    @State private var optimisticLiked: Bool? = nil
+
+    private var liked: Bool { optimisticLiked ?? post.likedBy.contains(uid) }
+    private var displayCount: Int {
+        guard let optimistic = optimisticLiked else { return post.likeCount }
+        let serverLiked = post.likedBy.contains(uid)
+        guard optimistic != serverLiked else { return post.likeCount }
+        return max(0, post.likeCount + (optimistic ? 1 : -1))
+    }
 
     var goldGradient: LinearGradient {
         LinearGradient(
@@ -331,17 +342,17 @@ struct SinglePostView: View {
 
                     HStack(spacing: 20) {
                         Button {
-                            guard !liked else { return }
-                            liked = true
-                            if let postId = post.id {
-                                onLike(postId)
-                            }
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
-                                likeScale = 1.4
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                    likeScale = 1.0
+                            let currentLiked = liked
+                            optimisticLiked = !currentLiked
+                            onToggleLike(post, currentLiked)
+                            if !currentLiked {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
+                                    likeScale = 1.4
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                        likeScale = 1.0
+                                    }
                                 }
                             }
                         } label: {
@@ -354,27 +365,31 @@ struct SinglePostView: View {
                                         : LinearGradient(colors: [Color(hex: "#D4C5A0")], startPoint: .top, endPoint: .bottom)
                                     )
                                     .scaleEffect(likeScale)
-                                Text("\(post.likeCount)")
+                                Text("\(displayCount)")
                                     .font(.system(size: 13, weight: .light))
+                                    .monospacedDigit()
                                     .foregroundColor(liked ? Color(hex: "#C9A84C") : Color(hex: "#D4C5A0"))
                             }
                         }
 
-                        Button {
-                            onStartChat(post)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "bubble.left")
-                                    .font(.system(size: 14, weight: .light))
-                                Text("Chat privately")
-                                    .font(.system(size: 13, weight: .light))
-                                    .tracking(0.3)
+                        // Chat button — hidden on own posts
+                        if post.authorUID != uid {
+                            Button {
+                                onStartChat(post)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "bubble.left")
+                                        .font(.system(size: 14, weight: .light))
+                                    Text("Chat privately")
+                                        .font(.system(size: 13, weight: .light))
+                                        .tracking(0.3)
+                                }
+                                .foregroundColor(Color(hex: "#A98634"))
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 10)
+                                .background(GoldShimmerCapsule(lineWidth: 2.5, colors: GoldShimmer.softColors))
+                                .shadow(color: Color(hex: "#D0AC5F").opacity(0.12), radius: 5, y: 1)
                             }
-                            .foregroundColor(Color(hex: "#A98634"))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
-                            .background(GoldShimmerCapsule(lineWidth: 2.5, colors: GoldShimmer.softColors))
-                            .shadow(color: Color(hex: "#D0AC5F").opacity(0.12), radius: 5, y: 1)
                         }
 
                         Spacer()
@@ -405,6 +420,10 @@ struct SinglePostView: View {
                     selectedImageURL = nil
                 }
             }
+        }
+        .onChange(of: post.likedBy) {
+            // Server state caught up — drop the optimistic override
+            optimisticLiked = nil
         }
         .alert("Report this post?", isPresented: $showReport) {
             Button("Report", role: .destructive) { }
@@ -529,7 +548,8 @@ struct FullScreenImageItem: Identifiable {
             Post(title: "Can't sleep", bodyText: "Anyone else up late thinking about everything?", authorUID: "preview", tags: ["😴", "🌙"]),
             Post(title: "New here", bodyText: "Just downloaded this app. Excited to connect.", authorUID: "preview")
         ],
+        uid: "preview",
         onStartChat: { _ in },
-        onLike: { _ in }
+        onToggleLike: { _, _ in }
     )
 }

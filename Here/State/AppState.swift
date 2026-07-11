@@ -136,21 +136,6 @@ final class AppState: ObservableObject {
         }
     }
   
-    /// One-way like used by the feed UI; likedBy keeps it idempotent per user.
-    func likePost(postId: String) async {
-        guard !uid.isEmpty,
-              let post = posts.first(where: { $0.id == postId }),
-              !post.likedBy.contains(uid) else { return }
-        do {
-            try await db.collection("posts").document(postId).updateData([
-                "likeCount": FieldValue.increment(Int64(1)),
-                "likedBy": FieldValue.arrayUnion([uid])
-            ])
-        } catch {
-            print("Error liking post: \(error.localizedDescription)")
-        }
-    }
-
     func toggleLike(post: Post, alreadyLiked: Bool) async {
         guard let postId = post.id, !uid.isEmpty else { return }
         let countDelta = alreadyLiked ? (post.likeCount > 0 ? Int64(-1) : Int64(0)) : Int64(1)

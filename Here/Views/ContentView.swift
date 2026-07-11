@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var lastNonCreateTab: MainTab = .feed
     @State private var showCreateSheet = false
     @State private var heartBeating = false
+    @State private var navigateToThreadId: String? = nil
 
     @StateObject private var app = AppState(authService: AuthService())
 
@@ -52,18 +53,21 @@ struct ContentView: View {
                     FeedView(
                         // Private ("just for me") posts exist in Firestore — never show them to others
                         posts: app.posts.filter { !$0.isPrivate || $0.authorUID == app.uid },
+                        uid: app.uid,
                         onStartChat: { post in
                             Task {
-                                _ = await app.createThreadFromPost(post)
-                                selectedTab = .inbox
+                                if let threadId = await app.createThreadFromPost(post) {
+                                    navigateToThreadId = threadId
+                                    selectedTab = .inbox
+                                }
                             }
                         },
-                        onLike: { id in
-                            Task { await app.likePost(postId: id) }
+                        onToggleLike: { post, alreadyLiked in
+                            Task { await app.toggleLike(post: post, alreadyLiked: alreadyLiked) }
                         }
                     )
                 case .inbox:
-                    InboxView(app: app)
+                    InboxView(app: app, navigateToThreadId: $navigateToThreadId)
                 case .profile:
                     ProfileView()
                 }
@@ -132,8 +136,8 @@ struct ContentView: View {
             .padding(.bottom, 6)
         }
         .fullScreenCover(isPresented: $showCreateSheet) {
-            CreatePostView(onSubmit: { title, bodyText, images, tags in
-                await app.addPost(title: title, bodyText: bodyText, images: images, tags: tags)
+            CreatePostView(onSubmit: { title, bodyText, images, tags, isPrivate in
+                await app.addPost(title: title, bodyText: bodyText, images: images, tags: tags, isPrivate: isPrivate)
             })
         }
     }
