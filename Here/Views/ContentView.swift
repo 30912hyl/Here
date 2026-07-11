@@ -50,7 +50,8 @@ struct ContentView: View {
                     VoiceView()
                 case .feed, .create:
                     FeedView(
-                        posts: app.posts,
+                        // Private ("just for me") posts exist in Firestore — never show them to others
+                        posts: app.posts.filter { !$0.isPrivate || $0.authorUID == app.uid },
                         onStartChat: { post in
                             Task {
                                 _ = await app.createThreadFromPost(post)
@@ -211,6 +212,9 @@ extension View {
     /// Liquid Glass on iOS 26+, frosted capsule fallback on earlier versions.
     @ViewBuilder
     func glassTabBar() -> some View {
+        // glassEffect only exists in the iOS 26 SDK — older toolchains (Xcode 16)
+        // can't compile the call even behind #available, so gate on compiler too.
+        #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             self.glassEffect(.regular, in: Capsule())
         } else {
@@ -218,6 +222,11 @@ extension View {
                 .background(.ultraThinMaterial, in: Capsule())
                 .overlay(Capsule().stroke(.white.opacity(0.4), lineWidth: 0.5))
         }
+        #else
+        self
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.4), lineWidth: 0.5))
+        #endif
     }
 }
 

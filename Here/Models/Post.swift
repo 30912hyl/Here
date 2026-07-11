@@ -18,6 +18,8 @@ struct Post: Identifiable, Codable {
     let expiresAt: Date
     var likeCount: Int
     var tags: [String]
+    var isPrivate: Bool
+    var likedBy: [String]
 
     init(
         id: String? = nil,
@@ -27,7 +29,9 @@ struct Post: Identifiable, Codable {
         authorUID: String,
         createdAt: Date = Date(),
         likeCount: Int = 0,
-        tags: [String] = []
+        tags: [String] = [],
+        isPrivate: Bool = false,
+        likedBy: [String] = []
     ) {
         self.id = id
         self.title = title
@@ -38,24 +42,27 @@ struct Post: Identifiable, Codable {
         self.expiresAt = createdAt.addingTimeInterval(48 * 60 * 60)
         self.likeCount = likeCount
         self.tags = tags
+        self.isPrivate = isPrivate
+        self.likedBy = likedBy
+    }
+    // Custom Codable decoder so that Firestore documents created before the `tags`,
+    // `likedBy`, and `isPrivate` fields were added can still decode successfully.
+    enum CodingKeys: String, CodingKey {
+        case id, title, bodyText, imageURLs, authorUID, createdAt, expiresAt, likeCount, tags, isPrivate, likedBy
     }
 
-    // Posts written before tags existed have no "tags" field in Firestore
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        _id = try container.decode(DocumentID<String>.self, forKey: .id)
-        title = try container.decode(String.self, forKey: .title)
-        bodyText = try container.decode(String.self, forKey: .bodyText)
-        imageURLs = try container.decode([String].self, forKey: .imageURLs)
-        authorUID = try container.decode(String.self, forKey: .authorUID)
-        createdAt = try container.decode(Date.self, forKey: .createdAt)
-        expiresAt = try container.decode(Date.self, forKey: .expiresAt)
-        likeCount = try container.decode(Int.self, forKey: .likeCount)
-        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        _id       = try c.decode(DocumentID<String>.self, forKey: .id)
+        title     = try c.decode(String.self, forKey: .title)
+        bodyText  = try c.decodeIfPresent(String.self, forKey: .bodyText) ?? ""
+        imageURLs = try c.decodeIfPresent([String].self, forKey: .imageURLs) ?? []
+        authorUID = try c.decode(String.self, forKey: .authorUID)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        expiresAt = try c.decode(Date.self, forKey: .expiresAt)
+        likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount) ?? 0
+        tags      = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        isPrivate = try c.decodeIfPresent(Bool.self, forKey: .isPrivate) ?? false
+        likedBy   = try c.decodeIfPresent([String].self, forKey: .likedBy) ?? []
     }
-    /// A post is valid if it has a title and at least some description content (text or images)
-//    var hasContent: Bool {
-//        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-//            && (!bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty)
-//    }
 }
