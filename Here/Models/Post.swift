@@ -35,7 +35,7 @@ struct Post: Identifiable, Codable {
         self.imageURLs = imageURLs
         self.authorUID = authorUID
         self.createdAt = createdAt
-        self.expiresAt = createdAt.addingTimeInterval(24 * 60 * 60)
+        self.expiresAt = createdAt.addingTimeInterval(48 * 60 * 60)
         self.likeCount = likeCount
         self.tags = tags
     }

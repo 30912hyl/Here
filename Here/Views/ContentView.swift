@@ -130,11 +130,10 @@ struct ContentView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 6)
         }
-        .sheet(isPresented: $showCreateSheet) {
+        .fullScreenCover(isPresented: $showCreateSheet) {
             CreatePostView(onSubmit: { title, bodyText, images, tags in
                 await app.addPost(title: title, bodyText: bodyText, images: images, tags: tags)
             })
-            .presentationCornerRadius(28)
         }
     }
 

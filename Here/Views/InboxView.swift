@@ -82,9 +82,13 @@ struct ThreadCard: View {
                 .frame(width: 2, height: 44)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(thread.postTitle)
+                Text(thread.nickname)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(isEnded ? Color(hex: "#C4B89A") : Color(hex: "#2C2416"))
+
+                Text("re: \(thread.postTitle)")
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundColor(isEnded ? Color(hex: "#D4C9B0") : Color(hex: "#C4B89A"))
 
                 Text(lastMessage)
                     .font(.system(size: 13, weight: .light))

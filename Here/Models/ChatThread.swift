@@ -41,13 +41,15 @@ struct ChatThread: Identifiable, Codable {
     var isManuallyFrozen: Bool
     var hasExtendedOnce: Bool
     var continueChoices: [String: String]  // [uid: "undecided"/"yes"/"no"]
+    var nickname: String
 
     init(
         id: String? = nil,
         postTitle: String,
         participants: [String],
         createdAt: Date = Date(),
-        ttlSeconds: TimeInterval = 24 * 60 * 60
+        ttlSeconds: TimeInterval = 24 * 60 * 60,
+        nickname: String = ChatThread.generateNickname()
     ) {
         self.id = id
         self.postTitle = postTitle
@@ -56,6 +58,7 @@ struct ChatThread: Identifiable, Codable {
         self.expiresAt = createdAt.addingTimeInterval(ttlSeconds)
         self.isManuallyFrozen = false
         self.hasExtendedOnce = false
+        self.nickname = nickname
         // Both start undecided
         var choices: [String: String] = [:]
         for uid in participants {
@@ -63,7 +66,43 @@ struct ChatThread: Identifiable, Codable {
         }
         self.continueChoices = choices
     }
-    
+
+    static func generateNickname() -> String {
+        let adjectives = [
+            "gentle", "quiet", "golden", "soft", "silver", "wandering",
+            "tender", "warm", "still", "amber", "velvet", "calm",
+            "bright", "wild", "dawn", "misty", "rosy", "early"
+        ]
+        let nouns = [
+            "moon", "rain", "river", "spark", "echo", "bloom",
+            "mist", "light", "cloud", "ember", "tide", "rose",
+            "leaf", "song", "sky", "field", "flame", "shore"
+        ]
+        let adj  = adjectives.randomElement() ?? "quiet"
+        let noun = nouns.randomElement()      ?? "moon"
+        return "\(adj) \(noun)"
+    }
+
+    // Custom decoder so old Firestore documents without `nickname` still decode.
+    enum CodingKeys: String, CodingKey {
+        case id, postTitle, participants, createdAt, expiresAt
+        case isManuallyFrozen, hasExtendedOnce, continueChoices, nickname
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        _id              = try  c.decode(DocumentID<String>.self, forKey: .id)
+        postTitle        = try  c.decode(String.self,             forKey: .postTitle)
+        participants     = try  c.decode([String].self,           forKey: .participants)
+        createdAt        = try  c.decode(Date.self,               forKey: .createdAt)
+        expiresAt        = try  c.decode(Date.self,               forKey: .expiresAt)
+        isManuallyFrozen = (try? c.decode(Bool.self,              forKey: .isManuallyFrozen)) ?? false
+        hasExtendedOnce  = (try? c.decode(Bool.self,              forKey: .hasExtendedOnce))  ?? false
+        continueChoices  = (try? c.decode([String: String].self,  forKey: .continueChoices))  ?? [:]
+        nickname         = (try? c.decode(String.self,            forKey: .nickname))         ?? ChatThread.generateNickname()
+    }
+
+
     func isExpired(now: Date = Date()) -> Bool {
         now >= expiresAt
     }
