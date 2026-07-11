@@ -101,12 +101,15 @@ struct CreatePostView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 14) {
 
-                        // Prompt
-                        Text("dear stranger bestie,")
-                            .font(.system(size: 28, weight: .thin))
-                            .foregroundColor(cpBrownText)
-                            .padding(.horizontal, 26)
-                            .padding(.bottom, 6)
+                        // Prompt — "stranger" in a light gold to match the app palette
+                        (
+                            Text("dear ").foregroundColor(cpBrownText)
+                            + Text("stranger").foregroundColor(Color(hex: "#E9CF8B"))
+                            + Text(" bestie,").foregroundColor(cpBrownText)
+                        )
+                        .font(.system(size: 28, weight: .thin))
+                        .padding(.horizontal, 26)
+                        .padding(.bottom, 6)
 
                         // ── Title card ───────────────────────────────────
                         VStack(alignment: .leading, spacing: 10) {
