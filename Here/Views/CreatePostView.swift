@@ -368,6 +368,7 @@ struct CreatePostView: View {
                     }
                     .padding(.top, 4)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
         }
         .onChange(of: selectedItems) {

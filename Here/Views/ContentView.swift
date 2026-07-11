@@ -25,6 +25,7 @@ struct ContentView: View {
                 app.authService = authService
                 app.startListening()
             }
+            KeyboardDismisser.install()
         }
         .onChange(of: authService.isSignedIn) {
             print("isSignedIn changed to: \(authService.isSignedIn)")
@@ -231,6 +232,31 @@ extension View {
             .background(.ultraThinMaterial, in: Capsule())
             .overlay(Capsule().stroke(.white.opacity(0.4), lineWidth: 0.5))
         #endif
+    }
+}
+
+// MARK: - Keyboard Dismisser
+// Window-level tap so any tap outside a text field collapses the keyboard,
+// including inside fullScreenCover sheets like CreatePostView.
+private final class KeyboardDismisser: NSObject {
+    static let shared = KeyboardDismisser()
+
+    private static var isInstalled = false
+
+    static func install() {
+        guard !isInstalled else { return }
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) else { return }
+        let tap = UITapGestureRecognizer(target: shared, action: #selector(dismiss))
+        tap.cancelsTouchesInView = false
+        window.addGestureRecognizer(tap)
+        isInstalled = true
+    }
+
+    @objc private func dismiss() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }
 
