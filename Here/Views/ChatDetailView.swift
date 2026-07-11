@@ -25,7 +25,7 @@ struct ChatDetailView: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
+            colors: [Color(hex: "#DDBE74")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

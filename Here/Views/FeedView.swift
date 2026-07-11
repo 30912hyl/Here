@@ -36,7 +36,7 @@ struct FeedView: View {
                     Image(systemName: "heart")
                         .font(.system(size: 40, weight: .thin))
                         .foregroundStyle(LinearGradient(
-                            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
+                            colors: [Color(hex: "#DDBE74")],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ))
@@ -214,7 +214,7 @@ struct EmojiTagPill: View {
 
     private var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
+            colors: [Color(hex: "#DDBE74")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -231,23 +231,22 @@ struct EmojiTagPill: View {
                         .opacity(0.7)
                 }
             }
-            .foregroundColor(isSelected ? .white : Color(hex: "#9A7B2E"))
+            .foregroundColor(isSelected ? Color(hex: "#A98634") : Color(hex: "#9A7B2E"))
             .padding(.horizontal, 13)
             .padding(.vertical, 7)
             .background {
                 if isSelected {
-                    Capsule().fill(goldGradient)
+                    GoldShimmerCapsule(lineWidth: 2)
                 } else {
                     Capsule().fill(.ultraThinMaterial)
                 }
             }
-            .overlay(
-                Capsule().stroke(
-                    isSelected ? .clear : Color(hex: "#E8CC7A").opacity(0.7),
-                    lineWidth: 1
-                )
-            )
-            .shadow(color: Color(hex: "#C9A84C").opacity(isSelected ? 0.35 : 0.1), radius: 4, y: 1)
+            .overlay {
+                if !isSelected {
+                    Capsule().stroke(Color(hex: "#E8CC7A").opacity(0.7), lineWidth: 1)
+                }
+            }
+            .shadow(color: Color(hex: "#D0AC5F").opacity(isSelected ? 0.25 : 0.1), radius: 4, y: 1)
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
@@ -267,7 +266,7 @@ struct SinglePostView: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
+            colors: [Color(hex: "#DDBE74")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -371,11 +370,11 @@ struct SinglePostView: View {
                                     .font(.system(size: 13, weight: .light))
                                     .tracking(0.3)
                             }
-                            .foregroundColor(.white)
+                            .foregroundColor(Color(hex: "#A98634"))
                             .padding(.horizontal, 18)
-                            .padding(.vertical, 9)
-                            .background(goldGradient)
-                            .clipShape(Capsule())
+                            .padding(.vertical, 10)
+                            .background(GoldShimmerCapsule(lineWidth: 2.5, colors: GoldShimmer.softColors))
+                            .shadow(color: Color(hex: "#D0AC5F").opacity(0.12), radius: 5, y: 1)
                         }
 
                         Spacer()

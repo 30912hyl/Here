@@ -89,12 +89,21 @@ struct ContentView: View {
                     showCreateSheet = true
                 } label: {
                     ZStack {
+                        // 乳白内里 + 流动金边
                         Image(systemName: "heart.fill")
                             .font(.system(size: 44, weight: .thin))
-                            .foregroundStyle(goldGradient)
-                            .shadow(color: Color(hex: "#DCB964").opacity(0.25), radius: 5, y: 2)
-                            .scaleEffect(heartBeating ? 1.25 : 1.0)
+                            .foregroundStyle(GoldShimmer.milk)
+                        Image(systemName: "heart")
+                            .font(.system(size: 44, weight: .regular))
+                            .foregroundStyle(
+                                AngularGradient(
+                                    gradient: Gradient(colors: GoldShimmer.softColors),
+                                    center: .center,
+                                    angle: .degrees(210)
+                                )
+                            )
                     }
+                    .shadow(color: Color(hex: "#D0AC5F").opacity(0.15), radius: 5, y: 2)
                     .scaleEffect(heartBeating ? 1.25 : 1.0)
                     
                 }
@@ -147,7 +156,7 @@ struct ContentView: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
+            colors: [Color(hex: "#DDBE74")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -166,7 +175,7 @@ struct CustomTabItem: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
+            colors: [Color(hex: "#DDBE74")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
