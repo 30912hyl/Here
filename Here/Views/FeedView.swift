@@ -388,11 +388,13 @@ private struct SparkleParticle {
 }
 
 struct SparkleBackground: View {
-    private let particles: [SparkleParticle]
+    // Generated once for the app's lifetime — building these in `init` would
+    // reshuffle the whole starfield every time the feed re-renders (e.g. on a like).
+    private static let particles: [SparkleParticle] = makeParticles(count: 2500)
 
-    init(count: Int = 2500) {
+    private static func makeParticles(count: Int) -> [SparkleParticle] {
         var rng = SystemRandomNumberGenerator()
-        particles = (0..<count).map { i in
+        return (0..<count).map { i in
             let isStar = i % 3 == 0
             // Power distribution: concentrates particles toward the top of the screen.
             // rawY is uniform [0,1]; raising it to 1.8 skews values toward 0 (top).
@@ -432,7 +434,7 @@ struct SparkleBackground: View {
             Color.white
             TimelineView(.animation(minimumInterval: 0.05)) { timeline in
                 Canvas { context, size in
-                    for p in particles {
+                    for p in Self.particles {
                         let raw     = p.opacity(at: timeline.date)
                         let yFade   = max(0.0, 1.0 - p.y / 0.48)
                         let opacity = raw * yFade

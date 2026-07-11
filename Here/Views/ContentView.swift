@@ -49,8 +49,8 @@ struct ContentView: View {
 
                 FeedView(
                     posts: app.posts.filter { !$0.isPrivate || $0.authorUID == app.uid },
-                    uid: app.uid,
                     tags: app.topTags(),
+                    uid: app.uid,
                     onStartChat: { post in
                         Task {
                             if let threadId = await app.createThreadFromPost(post) {
@@ -131,9 +131,10 @@ struct ContentView: View {
           }
         }
         .fullScreenCover(isPresented: $showCreateSheet) {
-            CreatePostView(onSubmit: { title, bodyText, images in
-                await app.addPost(title: title, bodyText: bodyText, images: images)
+            CreatePostView(onSubmit: { title, bodyText, images, tags, isPrivate in
+                await app.addPost(title: title, bodyText: bodyText, images: images, tags: tags, isPrivate: isPrivate)
             })
+        }
         }
     }
 

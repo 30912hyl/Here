@@ -30,7 +30,7 @@ struct Post: Identifiable, Codable {
         createdAt: Date = Date(),
         likeCount: Int = 0,
         tags: [String] = [],
-        isPrivate: Bool = false
+        isPrivate: Bool = false,
         likedBy: [String] = []
     ) {
         self.id = id
@@ -45,11 +45,10 @@ struct Post: Identifiable, Codable {
         self.isPrivate = isPrivate
         self.likedBy = likedBy
     }
-    // Custom Codable decoder so that Firestore documents created before the `tags`
-    // field was added can still decode successfully (falls back to an empty array).
-    // `id` is omitted from CodingKeys — Firestore injects @DocumentID automatically.
+    // Custom Codable decoder so that Firestore documents created before the `tags`,
+    // `likedBy`, and `isPrivate` fields were added can still decode successfully.
     enum CodingKeys: String, CodingKey {
-        case title, bodyText, imageURLs, authorUID, createdAt, expiresAt, likeCount, tags, isPrivate
+        case id, title, bodyText, imageURLs, authorUID, createdAt, expiresAt, likeCount, tags, isPrivate, likedBy
     }
 
     init(from decoder: Decoder) throws {

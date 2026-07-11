@@ -34,6 +34,7 @@ struct CreatePostView: View {
     @State private var bodyText = ""
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var images: [UIImage] = []
+    @State private var imageLoadTask: Task<Void, Never>? = nil
     @State private var isUploading = false
     @State private var selectedTags: [String] = []
     @State private var customTagInput = ""
@@ -204,7 +205,6 @@ struct CreatePostView: View {
                                                     .frame(width: 90, height: 90)
                                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                                                 Button {
-                                                    images.remove(at: idx)
                                                     selectedItems.remove(at: idx)
                                                 } label: {
                                                     Image(systemName: "xmark.circle.fill")
@@ -369,14 +369,18 @@ struct CreatePostView: View {
             }
         }
         .onChange(of: selectedItems) {
-            Task {
-                images = []
+            imageLoadTask?.cancel()
+            imageLoadTask = Task {
+                var loaded: [UIImage] = []
                 for item in selectedItems {
+                    guard !Task.isCancelled else { return }
                     if let data = try? await item.loadTransferable(type: Data.self),
                        let uiImage = UIImage(data: data) {
-                        images.append(uiImage)
+                        loaded.append(uiImage)
                     }
                 }
+                guard !Task.isCancelled else { return }
+                images = loaded
             }
         }
     }
@@ -431,5 +435,5 @@ private struct OptionalBadge: View {
 // MARK: - Preview
 
 #Preview {
-    CreatePostView(onSubmit: { _, _, _ in })
+    CreatePostView(onSubmit: { _, _, _, _, _ in })
 }

@@ -50,6 +50,7 @@ struct InboxView: View {
             }
             .listStyle(.plain)
             .background(Color.white)
+            .navigationTitle("Chats")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { threadId in
                 if let thread = app.threads.first(where: { $0.id == threadId }) {
