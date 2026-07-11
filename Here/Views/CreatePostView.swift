@@ -9,13 +9,18 @@ import PhotosUI
 
 struct CreatePostView: View {
     @Environment(\.dismiss) private var dismiss
-    let onSubmit: (String, String, [UIImage]) async -> Void
+    let onSubmit: (String, String, [UIImage], [String]) async -> Void
 
     @State private var title = ""
     @State private var bodyText = ""
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var images: [UIImage] = []
+    @State private var tags: [String] = []
+    @State private var tagInput = ""
     @State private var isUploading = false
+
+    private let presetTags = ["😄", "😢", "🥰", "😡", "😴", "🍚", "☕️", "🎮", "🎵", "✨"]
+    private let maxTags = 10
 
     private var isValid: Bool {
         let hasTitle = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -77,6 +82,79 @@ struct CreatePostView: View {
                 }
 
                 Section {
+                    if !tags.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(tags, id: \.self) { tag in
+                                    HStack(spacing: 4) {
+                                        Text("#\(tag)")
+                                            .font(.system(size: 16))
+                                        Button {
+                                            tags.removeAll { $0 == tag }
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 13))
+                                                .foregroundStyle(Color(hex: "#C9A84C").opacity(0.6))
+                                        }
+                                        .buttonStyle(.borderless)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Capsule().fill(Color(hex: "#F7E7CE").opacity(0.6)))
+                                    .overlay(Capsule().stroke(Color(hex: "#E8CC7A"), lineWidth: 1))
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+
+                    HStack {
+                        TextField("😄👌 emoji only", text: $tagInput)
+                            .onChange(of: tagInput) { _, newValue in
+                                let filtered = newValue.emojiOnly
+                                if filtered != newValue { tagInput = filtered }
+                            }
+                            .onSubmit { commitTagInput() }
+                        Button("Add") { commitTagInput() }
+                            .buttonStyle(.borderless)
+                            .disabled(tagInput.isEmpty || tags.count >= maxTags)
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(presetTags, id: \.self) { emoji in
+                                Button {
+                                    toggleTag(emoji)
+                                } label: {
+                                    Text(emoji)
+                                        .font(.system(size: 24))
+                                        .padding(7)
+                                        .background(
+                                            Circle().fill(
+                                                tags.contains(emoji)
+                                                ? Color(hex: "#F2DFAF")
+                                                : Color(.systemGray6)
+                                            )
+                                        )
+                                        .overlay(
+                                            Circle().stroke(
+                                                tags.contains(emoji) ? Color(hex: "#C9A84C") : .clear,
+                                                lineWidth: 1.5
+                                            )
+                                        )
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    Text("Tags")
+                } footer: {
+                    Text("Tags are emoji only (up to \(maxTags)) — a tag can be one emoji or a little string of them, like 😄 or 🍚🥄. They show on your post as #😄#🍚.")
+                }
+
+                Section {
                     Text("This post will disappear from the feed after 24 hours.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -113,12 +191,32 @@ struct CreatePostView: View {
         }
     }
 
+    private func commitTagInput() {
+        addTag(tagInput)
+        tagInput = ""
+    }
+
+    private func addTag(_ raw: String) {
+        let tag = raw.emojiOnly
+        guard !tag.isEmpty, !tags.contains(tag), tags.count < maxTags else { return }
+        tags.append(tag)
+    }
+
+    private func toggleTag(_ emoji: String) {
+        if let idx = tags.firstIndex(of: emoji) {
+            tags.remove(at: idx)
+        } else {
+            addTag(emoji)
+        }
+    }
+
     private func submitPost() async {
         isUploading = true
         await onSubmit(
             title.trimmingCharacters(in: .whitespacesAndNewlines),
             bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
-            images
+            images,
+            tags
         )
         isUploading = false
         dismiss()
@@ -126,5 +224,5 @@ struct CreatePostView: View {
 }
 
 #Preview {
-    CreatePostView(onSubmit: { _, _, _ in })
+    CreatePostView(onSubmit: { _, _, _, _ in })
 }

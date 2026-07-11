@@ -5,6 +5,29 @@ struct FeedView: View {
     let onStartChat: (Post) -> Void
     let onLike: (String) -> Void
 
+    @State private var selectedTag: String? = nil
+    @State private var showAllTags = false
+
+    private var tagCounts: [TagCount] {
+        var freq: [String: Int] = [:]
+        for post in posts {
+            // Legacy text tags may exist in Firestore — tags are emoji-only now
+            for tag in post.tags where tag.isEmojiOnly {
+                freq[tag, default: 0] += 1
+            }
+        }
+        return freq
+            .map { TagCount(tag: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+    }
+
+    private var filteredPosts: [Post] {
+        guard let tag = selectedTag else { return posts }
+        let matching = posts.filter { $0.tags.contains(tag) }
+        // Tag disappeared (e.g. its posts expired) — fall back to everything
+        return matching.isEmpty ? posts : matching
+    }
+
     var body: some View {
         if posts.isEmpty {
             ZStack {
@@ -13,7 +36,7 @@ struct FeedView: View {
                     Image(systemName: "heart")
                         .font(.system(size: 40, weight: .thin))
                         .foregroundStyle(LinearGradient(
-                            colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+                            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ))
@@ -26,21 +49,208 @@ struct FeedView: View {
                 }
             }
         } else {
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(spacing: 0) {
-                    ForEach(posts) { post in
-                        SinglePostView(
-                            post: post,
-                            onStartChat: onStartChat,
-                            onLike: onLike
-                        )
-                        .containerRelativeFrame(.vertical)
+            ZStack(alignment: .top) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(filteredPosts) { post in
+                            SinglePostView(
+                                post: post,
+                                onStartChat: onStartChat,
+                                onLike: onLike
+                            )
+                            .containerRelativeFrame(.vertical)
+                        }
                     }
                 }
+                .scrollTargetBehavior(.paging)
+                .ignoresSafeArea()
+                .id(selectedTag ?? "all")  // switching tags resets scroll to the first post
+
+                EmojiTagBar(
+                    tags: tagCounts,
+                    selectedTag: $selectedTag,
+                    onExpand: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                            showAllTags = true
+                        }
+                    }
+                )
+                .padding(.top, 4)
             }
-            .scrollTargetBehavior(.paging)
-            .ignoresSafeArea(edges: .top)
+            .overlay {
+                if showAllTags {
+                    AllTagsOverlay(
+                        tags: tagCounts,
+                        selectedTag: $selectedTag,
+                        onClose: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                                showAllTags = false
+                            }
+                        }
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
         }
+    }
+}
+
+// MARK: - Emoji 标签筛选条
+struct TagCount: Identifiable {
+    var id: String { tag }
+    let tag: String
+    let count: Int
+}
+
+struct EmojiTagBar: View {
+    let tags: [TagCount]
+    @Binding var selectedTag: String?
+    let onExpand: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    EmojiTagPill(label: "All", count: nil, isSelected: selectedTag == nil) {
+                        selectedTag = nil
+                    }
+                    ForEach(tags) { item in
+                        EmojiTagPill(
+                            label: "#\(item.tag)",
+                            count: item.count,
+                            isSelected: selectedTag == item.tag
+                        ) {
+                            selectedTag = (selectedTag == item.tag) ? nil : item.tag
+                        }
+                    }
+                }
+                .padding(.leading, 16)
+                .padding(.vertical, 6)
+            }
+
+            if !tags.isEmpty {
+                Button(action: onExpand) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color(hex: "#9A7B2E"))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(.ultraThinMaterial))
+                        .overlay(Circle().stroke(Color(hex: "#E8CC7A").opacity(0.7), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 16)
+            }
+        }
+    }
+}
+
+// MARK: - 全屏标签页(下拉展开,上下滑动浏览全部标签)
+struct AllTagsOverlay: View {
+    let tags: [TagCount]
+    @Binding var selectedTag: String?
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .background(Color(hex: "#F7E7CE").opacity(0.45))
+                .ignoresSafeArea()
+                .onTapGesture { onClose() }
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Tags")
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundColor(Color(hex: "#5C3A1E"))
+                    Spacer()
+                    Button(action: onClose) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(hex: "#9A7B2E"))
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(.ultraThinMaterial))
+                            .overlay(Circle().stroke(Color(hex: "#E8CC7A").opacity(0.7), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 14)
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 88), spacing: 10)],
+                        spacing: 12
+                    ) {
+                        EmojiTagPill(label: "All", count: nil, isSelected: selectedTag == nil) {
+                            selectedTag = nil
+                            onClose()
+                        }
+                        ForEach(tags) { item in
+                            EmojiTagPill(
+                                label: "#\(item.tag)",
+                                count: item.count,
+                                isSelected: selectedTag == item.tag
+                            ) {
+                                selectedTag = (selectedTag == item.tag) ? nil : item.tag
+                                onClose()
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
+                }
+            }
+        }
+    }
+}
+
+struct EmojiTagPill: View {
+    let label: String
+    let count: Int?
+    let isSelected: Bool
+    let action: () -> Void
+
+    private var goldGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(label)
+                    .font(.system(size: 14, weight: .medium))
+                if let count {
+                    Text("\(count)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .opacity(0.7)
+                }
+            }
+            .foregroundColor(isSelected ? .white : Color(hex: "#9A7B2E"))
+            .padding(.horizontal, 13)
+            .padding(.vertical, 7)
+            .background {
+                if isSelected {
+                    Capsule().fill(goldGradient)
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
+            .overlay(
+                Capsule().stroke(
+                    isSelected ? .clear : Color(hex: "#E8CC7A").opacity(0.7),
+                    lineWidth: 1
+                )
+            )
+            .shadow(color: Color(hex: "#C9A84C").opacity(isSelected ? 0.35 : 0.1), radius: 4, y: 1)
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
 }
 
@@ -57,7 +267,7 @@ struct SinglePostView: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -85,6 +295,21 @@ struct SinglePostView: View {
                                 .font(.system(size: 24, weight: .light))
                                 .foregroundColor(.black)
 
+                            if !post.tags.filter(\.isEmojiOnly).isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(post.tags.filter(\.isEmojiOnly), id: \.self) { tag in
+                                            Text("#\(tag)")
+                                                .font(.system(size: 15))
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 5)
+                                                .background(Capsule().fill(Color(hex: "#F7E7CE").opacity(0.55)))
+                                                .overlay(Capsule().stroke(Color(hex: "#E8CC7A").opacity(0.7), lineWidth: 1))
+                                        }
+                                    }
+                                }
+                            }
+
                             if !post.bodyText.isEmpty {
                                 Text(post.bodyText)
                                     .font(.system(size: 16, weight: .light))
@@ -102,7 +327,7 @@ struct SinglePostView: View {
                             }
                         }
                         .padding(.horizontal, 28)
-                        .frame(minHeight: geo.size.height - 140, alignment: .center)
+                        .frame(minHeight: geo.size.height - 230, alignment: .center)
                     }
 
                     HStack(spacing: 20) {
@@ -168,7 +393,9 @@ struct SinglePostView: View {
                         }
                     }
                     .padding(.horizontal, 28)
-                    .padding(.vertical, 20)
+                    .padding(.top, 20)
+                    // Keeps the action row above the floating glass tab bar
+                    .padding(.bottom, 112)
                 }
             }
             .fullScreenCover(item: Binding(
@@ -299,8 +526,8 @@ struct FullScreenImageItem: Identifiable {
 #Preview {
     FeedView(
         posts: [
-            Post(title: "Feeling grateful", bodyText: "Had a wonderful day today and wanted to share the vibes.", authorUID: "preview"),
-            Post(title: "Can't sleep", bodyText: "Anyone else up late thinking about everything?", authorUID: "preview"),
+            Post(title: "Feeling grateful", bodyText: "Had a wonderful day today and wanted to share the vibes.", authorUID: "preview", tags: ["😄", "🍚🥄"]),
+            Post(title: "Can't sleep", bodyText: "Anyone else up late thinking about everything?", authorUID: "preview", tags: ["😴", "🌙"]),
             Post(title: "New here", bodyText: "Just downloaded this app. Excited to connect.", authorUID: "preview")
         ],
         onStartChat: { _ in },

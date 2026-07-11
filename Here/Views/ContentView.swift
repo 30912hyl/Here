@@ -39,36 +39,34 @@ struct ContentView: View {
 
     private var mainTabView: some View {
         ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
+            // 备用底色:与 feed 底部一致的白,避免任何缝隙露出突兀的颜色
+            Color.white.ignoresSafeArea()
 
-            TabView(selection: $selectedTab) {
-                VoiceView()
-                    .tag(MainTab.voice)
-
-                FeedView(
-                    posts: app.posts,
-                    onStartChat: { post in
-                        Task {
-                            _ = await app.createThreadFromPost(post)
-                            selectedTab = .inbox
+            // 自绘标签栏,不用 TabView——iOS 26 上系统的 Liquid Glass 标签栏
+            // 用 .toolbar(.hidden) 藏不干净,会在自定义 bar 后面漏出来。
+            Group {
+                switch selectedTab {
+                case .voice:
+                    VoiceView()
+                case .feed, .create:
+                    FeedView(
+                        posts: app.posts,
+                        onStartChat: { post in
+                            Task {
+                                _ = await app.createThreadFromPost(post)
+                                selectedTab = .inbox
+                            }
+                        },
+                        onLike: { id in
+                            Task { await app.likePost(postId: id) }
                         }
-                    },
-                    onLike: { id in
-                        Task { await app.likePost(postId: id) }
-                    }
-                )
-                .tag(MainTab.feed)
-
-
-                Color.clear.tag(MainTab.create)
-
-                InboxView(app: app)
-                    .tag(MainTab.inbox)
-
-                ProfileView()
-                    .tag(MainTab.profile)
+                    )
+                case .inbox:
+                    InboxView(app: app)
+                case .profile:
+                    ProfileView()
+                }
             }
-            .toolbar(.hidden, for: .tabBar)
 
             HStack(spacing: 0) {
                 CustomTabItem(
@@ -94,7 +92,7 @@ struct ContentView: View {
                         Image(systemName: "heart.fill")
                             .font(.system(size: 44, weight: .thin))
                             .foregroundStyle(goldGradient)
-                            .shadow(color: Color(hex: "#C9A84C").opacity(0.4), radius: 6, y: 2)
+                            .shadow(color: Color(hex: "#DCB964").opacity(0.25), radius: 5, y: 2)
                             .scaleEffect(heartBeating ? 1.25 : 1.0)
                     }
                     .scaleEffect(heartBeating ? 1.25 : 1.0)
@@ -117,13 +115,15 @@ struct ContentView: View {
                     selected: $selectedTab
                 )
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .background(.ultraThinMaterial)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .glassTabBar()
+            .padding(.horizontal, 14)
+            .padding(.bottom, 6)
         }
         .sheet(isPresented: $showCreateSheet) {
-            CreatePostView(onSubmit: { title, bodyText, images in
-                await app.addPost(title: title, bodyText: bodyText, images: images)
+            CreatePostView(onSubmit: { title, bodyText, images, tags in
+                await app.addPost(title: title, bodyText: bodyText, images: images, tags: tags)
             })
             .presentationCornerRadius(28)
         }
@@ -147,7 +147,7 @@ struct ContentView: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -166,7 +166,7 @@ struct CustomTabItem: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+            colors: [Color(hex: "#EAD08F"), Color(hex: "#E3C57E"), Color(hex: "#D9B466")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -195,6 +195,21 @@ struct CustomTabItem: View {
             .frame(maxWidth: .infinity)
         }
         .animation(.easeInOut(duration: 0.2), value: isSelected)
+    }
+}
+
+// MARK: - Glass Tab Bar
+extension View {
+    /// Liquid Glass on iOS 26+, frosted capsule fallback on earlier versions.
+    @ViewBuilder
+    func glassTabBar() -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular, in: Capsule())
+        } else {
+            self
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().stroke(.white.opacity(0.4), lineWidth: 0.5))
+        }
     }
 }
 
