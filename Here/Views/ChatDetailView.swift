@@ -54,6 +54,16 @@ struct ChatDetailView: View {
                             withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
                         }
                     }
+                    .onAppear {
+                        // Messages are usually loaded before this view is pushed, so
+                        // onChange never fires; the tab-bar hide animation also shifts
+                        // layout after defaultScrollAnchor applies. Jump after layout.
+                        if let lastId = messages.last?.id {
+                            DispatchQueue.main.async {
+                                proxy.scrollTo(lastId, anchor: .bottom)
+                            }
+                        }
+                    }
                 }
 
                 if !frozen {
@@ -122,6 +132,10 @@ struct ChatDetailView: View {
         HStack(spacing: 12) {
             TextField("", text: $input)
                 .font(.system(size: 15, weight: .light))
+                // Light-only design: without an explicit color, dark mode renders
+                // white text on the white capsule
+                .foregroundColor(.black)
+                .tint(Color(hex: "#C9A84C"))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Color.white)

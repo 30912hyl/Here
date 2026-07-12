@@ -243,7 +243,7 @@ extension View {
 // MARK: - Keyboard Dismisser
 // Window-level tap so any tap outside a text field collapses the keyboard,
 // including inside fullScreenCover sheets like CreatePostView.
-private final class KeyboardDismisser: NSObject {
+private final class KeyboardDismisser: NSObject, UIGestureRecognizerDelegate {
     static let shared = KeyboardDismisser()
 
     private static var isInstalled = false
@@ -256,12 +256,37 @@ private final class KeyboardDismisser: NSObject {
             .first(where: { $0.isKeyWindow }) else { return }
         let tap = UITapGestureRecognizer(target: shared, action: #selector(dismiss))
         tap.cancelsTouchesInView = false
+        tap.delegate = shared
         window.addGestureRecognizer(tap)
         isInstalled = true
     }
 
     @objc private func dismiss() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    // Only fire when a text input is already focused AND the tap lands outside it.
+    // Receiving the focusing tap itself races the keyboard opening, which made
+    // text fields need several taps before the keyboard appeared.
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let responderView = UIResponder.currentFirst as? UIView else { return false }
+        let location = touch.location(in: responderView)
+        return !responderView.bounds.insetBy(dx: -8, dy: -8).contains(location)
+    }
+}
+
+extension UIResponder {
+    private static weak var _currentFirst: UIResponder?
+
+    /// The current first responder, found via the responder-chain action trick.
+    static var currentFirst: UIResponder? {
+        _currentFirst = nil
+        UIApplication.shared.sendAction(#selector(captureFirst), to: nil, from: nil, for: nil)
+        return _currentFirst
+    }
+
+    @objc private func captureFirst() {
+        UIResponder._currentFirst = self
     }
 }
 
