@@ -489,17 +489,34 @@ struct FullScreenImageView: View {
     let imageURL: String
     let onDismiss: () -> Void
 
+    private static let minScale: CGFloat = 1
+    private static let maxScale: CGFloat = 4
+    private static let doubleTapScale: CGFloat = 2.5
+
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
             if let url = URL(string: imageURL) {
-                RemoteImageView(url: url, maxPixelSize: 1600) { phase in
+                // 2048px so the image stays sharp when zoomed in
+                RemoteImageView(url: url, maxPixelSize: 2048) { phase in
                     switch phase {
                     case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
+                        GeometryReader { geo in
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .scaleEffect(scale)
+                                .offset(offset)
+                                .gesture(zoomAndPan(in: geo.size))
+                                .onTapGesture(count: 2) { toggleZoom() }
+                        }
                     case .failure:
                         VStack(spacing: 12) {
                             Image(systemName: "photo")
@@ -530,6 +547,82 @@ struct FullScreenImageView: View {
                 Spacer()
             }
         }
+    }
+
+    // MARK: Zoom gestures
+
+    private func zoomAndPan(in viewport: CGSize) -> some Gesture {
+        let pinch = MagnificationGesture()
+            .onChanged { value in
+                scale = min(max(lastScale * value, 0.7), Self.maxScale)
+            }
+            .onEnded { _ in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    if scale < Self.minScale {
+                        scale = Self.minScale
+                        offset = .zero
+                    }
+                    offset = clampedOffset(offset, in: viewport)
+                }
+                lastScale = scale
+                lastOffset = offset
+            }
+
+        let pan = DragGesture()
+            .onChanged { value in
+                if scale > Self.minScale {
+                    offset = CGSize(
+                        width: lastOffset.width + value.translation.width,
+                        height: lastOffset.height + value.translation.height
+                    )
+                } else {
+                    // At 1x, follow downward drags so a swipe down can close the viewer
+                    offset = CGSize(width: 0, height: max(0, value.translation.height))
+                }
+            }
+            .onEnded { value in
+                if scale > Self.minScale {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        offset = clampedOffset(offset, in: viewport)
+                    }
+                    lastOffset = clampedOffset(offset, in: viewport)
+                } else {
+                    // Dismiss on a decent pull or a quick flick; otherwise settle back
+                    if value.translation.height > 120 || value.predictedEndTranslation.height > 250 {
+                        onDismiss()
+                    } else {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            offset = .zero
+                        }
+                        lastOffset = .zero
+                    }
+                }
+            }
+
+        return pinch.simultaneously(with: pan)
+    }
+
+    private func toggleZoom() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if scale > Self.minScale {
+                scale = Self.minScale
+                offset = .zero
+            } else {
+                scale = Self.doubleTapScale
+            }
+        }
+        lastScale = scale
+        lastOffset = offset
+    }
+
+    /// Keeps the zoomed image from being dragged fully offscreen.
+    private func clampedOffset(_ proposed: CGSize, in viewport: CGSize) -> CGSize {
+        let maxX = max(0, (viewport.width * scale - viewport.width) / 2)
+        let maxY = max(0, (viewport.height * scale - viewport.height) / 2)
+        return CGSize(
+            width: min(max(proposed.width, -maxX), maxX),
+            height: min(max(proposed.height, -maxY), maxY)
+        )
     }
 }
 
