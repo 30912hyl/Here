@@ -1,61 +1,56 @@
 import SwiftUI
 
-// MARK: - Shared gold palette (FeedView)
-private let goldColors: [Color] = [
-    Color(hex: "#F8EFD6"),
-    Color(hex: "#F2DFAF"),
-    Color(hex: "#E8C97A")
-]
-
-private let goldAccent = Color(hex: "#E6C35C")
-private let goldGradient = LinearGradient(
-    colors: goldColors,
-    startPoint: .topLeading,
-    endPoint: .bottomTrailing
-)
-
-
-// MARK: - FeedView
-
 struct FeedView: View {
     let posts: [Post]
-    let tags: [AppState.TagCount]
     let uid: String
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
-    @State private var selectedTag: String? = nil
 
-    var filteredPosts: [Post] {
+    @State private var selectedTag: String? = nil
+    @State private var showAllTags = false
+
+    private var tagCounts: [TagCount] {
+        var freq: [String: Int] = [:]
+        for post in posts {
+            // Legacy text tags may exist in Firestore — tags are emoji-only now
+            for tag in post.tags where tag.isEmojiOnly {
+                freq[tag, default: 0] += 1
+            }
+        }
+        return freq
+            .map { TagCount(tag: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+    }
+
+    private var filteredPosts: [Post] {
         guard let tag = selectedTag else { return posts }
-        return posts.filter { $0.tags.contains(tag) }
+        let matching = posts.filter { $0.tags.contains(tag) }
+        // Tag disappeared (e.g. its posts expired) — fall back to everything
+        return matching.isEmpty ? posts : matching
     }
 
     var body: some View {
-        ZStack {
-            SparkleBackground()
-
-            VStack(spacing: 0) {
-            if !posts.isEmpty {
-                TagBar(tags: tags, selectedTag: $selectedTag)
-                    .padding(.vertical, 6)
-            }
-
-            if filteredPosts.isEmpty {
+        if posts.isEmpty {
+            ZStack {
+                StarryBackgroundView()
                 VStack(spacing: 16) {
                     Image(systemName: "heart")
                         .font(.system(size: 40, weight: .thin))
-                        .foregroundStyle(goldGradient)
-                    Text(posts.isEmpty ? "No posts yet." : "No posts tagged #\(selectedTag ?? "").")
+                        .foregroundStyle(LinearGradient(
+                            colors: [Color(hex: "#DDBE74")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                    Text("No posts yet.")
                         .font(.system(size: 16, weight: .light))
-                        .foregroundColor(goldAccent)
-                    if !posts.isEmpty {
-                        Text("Be the first to share.")
-                            .font(.system(size: 13, weight: .light))
-                            .foregroundColor(Color(hex: "#D8C898"))
-                    }
+                        .foregroundColor(Color(hex: "#C4A55A"))
+                    Text("Be the first to share.")
+                        .font(.system(size: 13, weight: .light))
+                        .foregroundColor(Color(hex: "#D4C5A0"))
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
+            }
+        } else {
+            ZStack(alignment: .top) {
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 0) {
                         ForEach(filteredPosts) { post in
@@ -70,124 +65,197 @@ struct FeedView: View {
                     }
                 }
                 .scrollTargetBehavior(.paging)
-                .ignoresSafeArea(edges: .bottom)
-                .id(selectedTag ?? "all")
-                .background(.clear)
+                .ignoresSafeArea()
+                .id(selectedTag ?? "all")  // switching tags resets scroll to the first post
+
+                EmojiTagBar(
+                    tags: tagCounts,
+                    selectedTag: $selectedTag,
+                    onExpand: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                            showAllTags = true
+                        }
+                    }
+                )
+                .padding(.top, 4)
             }
+            .overlay {
+                if showAllTags {
+                    AllTagsOverlay(
+                        tags: tagCounts,
+                        selectedTag: $selectedTag,
+                        onClose: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
+                                showAllTags = false
+                            }
+                        }
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
         }
     }
 }
 
-// MARK: - TagBar
+// MARK: - Emoji 标签筛选条
+struct TagCount: Identifiable {
+    var id: String { tag }
+    let tag: String
+    let count: Int
+}
 
-struct TagBar: View {
-    let tags: [AppState.TagCount]
+struct EmojiTagBar: View {
+    let tags: [TagCount]
     @Binding var selectedTag: String?
+    let onExpand: () -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                TagPill(label: "all", count: nil, isSelected: selectedTag == nil) {
-                    selectedTag = nil
-                }
-                ForEach(tags) { item in
-                    TagPill(label: item.tag, count: item.count, isSelected: selectedTag == item.tag) {
-                        selectedTag = (selectedTag == item.tag) ? nil : item.tag
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    EmojiTagPill(label: "All", count: nil, isSelected: selectedTag == nil) {
+                        selectedTag = nil
+                    }
+                    ForEach(tags) { item in
+                        EmojiTagPill(
+                            label: "#\(item.tag)",
+                            count: item.count,
+                            isSelected: selectedTag == item.tag
+                        ) {
+                            selectedTag = (selectedTag == item.tag) ? nil : item.tag
+                        }
                     }
                 }
+                .padding(.leading, 16)
+                .padding(.vertical, 6)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 4)
+
+            if !tags.isEmpty {
+                Button(action: onExpand) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Color(hex: "#9A7B2E"))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(.ultraThinMaterial))
+                        .overlay(Circle().stroke(Color(hex: "#E8CC7A").opacity(0.7), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 16)
+            }
         }
     }
 }
 
-// MARK: - TagPill
+// MARK: - 全屏标签页(下拉展开,上下滑动浏览全部标签)
+struct AllTagsOverlay: View {
+    let tags: [TagCount]
+    @Binding var selectedTag: String?
+    let onClose: () -> Void
 
-struct TagPill: View {
+    var body: some View {
+        ZStack(alignment: .top) {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .background(Color(hex: "#F7E7CE").opacity(0.45))
+                .ignoresSafeArea()
+                .onTapGesture { onClose() }
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Tags")
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundColor(Color(hex: "#5C3A1E"))
+                    Spacer()
+                    Button(action: onClose) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(hex: "#9A7B2E"))
+                            .frame(width: 32, height: 32)
+                            .background(Circle().fill(.ultraThinMaterial))
+                            .overlay(Circle().stroke(Color(hex: "#E8CC7A").opacity(0.7), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 14)
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 88), spacing: 10)],
+                        spacing: 12
+                    ) {
+                        EmojiTagPill(label: "All", count: nil, isSelected: selectedTag == nil) {
+                            selectedTag = nil
+                            onClose()
+                        }
+                        ForEach(tags) { item in
+                            EmojiTagPill(
+                                label: "#\(item.tag)",
+                                count: item.count,
+                                isSelected: selectedTag == item.tag
+                            ) {
+                                selectedTag = (selectedTag == item.tag) ? nil : item.tag
+                                onClose()
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 40)
+                }
+            }
+        }
+    }
+}
+
+struct EmojiTagPill: View {
     let label: String
     let count: Int?
     let isSelected: Bool
     let action: () -> Void
 
+    private var goldGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: "#DDBE74")],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 4) {
-                Text("#\(label)")
-                    .font(.system(size: 15, weight: .medium))
-                    .tracking(0.2)
+                Text(label)
+                    .font(.system(size: 14, weight: .medium))
                 if let count {
                     Text("\(count)")
-                        .font(.system(size: 13, weight: .regular))
-                        .opacity(0.75)
+                        .font(.system(size: 11, weight: .semibold))
+                        .opacity(0.7)
                 }
             }
-            .foregroundStyle(isSelected ? Color.white : goldAccent)
-            .padding(.horizontal, 14)
+            .foregroundColor(isSelected ? Color(hex: "#A98634") : Color(hex: "#9A7B2E"))
+            .padding(.horizontal, 13)
             .padding(.vertical, 7)
             .background {
                 if isSelected {
-                    Capsule().fill(goldGradient)
+                    GoldShimmerCapsule(lineWidth: 2)
                 } else {
-                    Capsule().fill(Color.white)
-                        .overlay(Capsule().strokeBorder(goldAccent, lineWidth: 1))
+                    Capsule().fill(.ultraThinMaterial)
                 }
             }
+            .overlay {
+                if !isSelected {
+                    Capsule().stroke(Color(hex: "#E8CC7A").opacity(0.7), lineWidth: 1)
+                }
+            }
+            .shadow(color: Color(hex: "#D0AC5F").opacity(isSelected ? 0.25 : 0.1), radius: 4, y: 1)
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: isSelected)
     }
 }
 
-// MARK: - Soft Corner Mask
-
-private extension View {
-    /// Clips content with a blurred rounded-rect mask so corners fade out smoothly.
-    func softCorners(radius: CGFloat = 20, fade: CGFloat = 8) -> some View {
-        self.mask(
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .blur(radius: fade)
-        )
-    }
-}
-
-// MARK: - Post Image Strip
-
-private struct PostImageStrip: View {
-    let imageURLs: [String]
-    let onTap: (String) -> Void
-    private let imgW: CGFloat = 155
-    private let imgH: CGFloat = 207  // 3:4 portrait ratio
-
-    var body: some View {
-        HStack(spacing: 10) {
-            ForEach(Array(imageURLs.enumerated()), id: \.offset) { _, urlString in
-                if let url = URL(string: urlString) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable()
-                                .scaledToFill()
-                                .frame(width: imgW, height: imgH)
-                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                .onTapGesture { onTap(urlString) }
-                        default:
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color(hex: "#F2DFAF").opacity(0.5))
-                                .frame(width: imgW, height: imgH)
-                        }
-                    }
-                }
-            }
-            //.scrollTargetBehavior(.paging)
-            //.ignoresSafeArea(edges: .top)
-        }
-    }
-}
-          
 // MARK: - Single Post
-          
 struct SinglePostView: View {
     let post: Post
     let uid: String
@@ -196,8 +264,8 @@ struct SinglePostView: View {
 
     @State private var likeScale = 1.0
     @State private var showReport = false
-    @State private var optimisticLiked: Bool? = nil
     @State private var selectedImageURL: String? = nil
+    @State private var optimisticLiked: Bool? = nil
 
     private var liked: Bool { optimisticLiked ?? post.likedBy.contains(uid) }
     private var displayCount: Int {
@@ -206,103 +274,156 @@ struct SinglePostView: View {
         guard optimistic != serverLiked else { return post.likeCount }
         return max(0, post.likeCount + (optimistic ? 1 : -1))
     }
+
+    var goldGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: "#DDBE74")],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     var body: some View {
-        ZStack {
-            Color.clear
+        GeometryReader { geo in
+            ZStack {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(hex: "#F7E7CE"), location: 0.0),
+                        .init(color: Color(hex: "#FFFFFF"), location: 0.5)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                GeometryReader { geo in
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text(post.title)
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundColor(Color(hex: "#5C3A1E"))
+                StarryBackgroundView()
 
-                        if !post.bodyText.isEmpty {
-                            Text(post.bodyText)
-                                .font(.system(size: 17, weight: .regular))
-                                .foregroundColor(Color(hex: "#5C3A1E"))
-                                .lineSpacing(8)
+                VStack(spacing: 0) {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text(post.title)
+                                .font(.system(size: 24, weight: .light))
+                                .foregroundColor(.black)
+
+                            if !post.tags.filter(\.isEmojiOnly).isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(post.tags.filter(\.isEmojiOnly), id: \.self) { tag in
+                                            Text("#\(tag)")
+                                                .font(.system(size: 15))
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 5)
+                                                .background(Capsule().fill(Color(hex: "#F7E7CE").opacity(0.55)))
+                                                .overlay(Capsule().stroke(Color(hex: "#E8CC7A").opacity(0.7), lineWidth: 1))
+                                        }
+                                    }
+                                }
+                            }
+
+                            if !post.bodyText.isEmpty {
+                                Text(post.bodyText)
+                                    .font(.system(size: 16, weight: .light))
+                                    .foregroundColor(Color(hex: "#5C5C5C"))
+                                    .lineSpacing(6)
+                            }
+
+                            if !post.imageURLs.isEmpty {
+                                ImageGridView(
+                                    imageURLs: post.imageURLs,
+                                    onImageTap: { urlString in
+                                        selectedImageURL = urlString
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 28)
+                        .frame(minHeight: geo.size.height - 230, alignment: .center)
+                    }
+
+                    HStack(spacing: 20) {
+                        Button {
+                            let currentLiked = liked
+                            optimisticLiked = !currentLiked
+                            onToggleLike(post, currentLiked)
+                            if !currentLiked {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
+                                    likeScale = 1.4
+                                }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                        likeScale = 1.0
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: liked ? "heart.fill" : "heart")
+                                    .font(.system(size: 20, weight: .light))
+                                    .foregroundStyle(
+                                        liked
+                                        ? goldGradient
+                                        : LinearGradient(colors: [Color(hex: "#D4C5A0")], startPoint: .top, endPoint: .bottom)
+                                    )
+                                    .scaleEffect(likeScale)
+                                Text("\(displayCount)")
+                                    .font(.system(size: 13, weight: .light))
+                                    .monospacedDigit()
+                                    .foregroundColor(liked ? Color(hex: "#C9A84C") : Color(hex: "#D4C5A0"))
+                            }
                         }
 
-                        if !post.imageURLs.isEmpty {
-                            // Negative horizontal padding breaks out of the parent's 28pt inset
-                            // so images can scroll edge-to-edge. The strip re-applies leading
-                            // padding internally to stay aligned with the text above.
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                PostImageStrip(imageURLs: post.imageURLs, onTap: { selectedImageURL = $0 })
-                                    .padding(.leading, 28)
-                                    .padding(.trailing, 40)
-                                    .padding(.vertical, 4)
+                        // Chat button — hidden on own posts
+                        if post.authorUID != uid {
+                            Button {
+                                onStartChat(post)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "bubble.left")
+                                        .font(.system(size: 14, weight: .light))
+                                    Text("Chat privately")
+                                        .font(.system(size: 13, weight: .light))
+                                        .tracking(0.3)
+                                }
+                                .foregroundColor(Color(hex: "#A98634"))
+                                .padding(.horizontal, 18)
+                                .padding(.vertical, 10)
+                                .background(GoldShimmerCapsule(lineWidth: 2.5, colors: GoldShimmer.softColors))
+                                .shadow(color: Color(hex: "#D0AC5F").opacity(0.12), radius: 5, y: 1)
                             }
-                            .padding(.horizontal, -28)
+                        }
+
+                        Spacer()
+
+                        Menu {
+                            Button(role: .destructive) {
+                                showReport = true
+                            } label: {
+                                Label("Report Post", systemImage: "flag")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 18, weight: .light))
+                                .foregroundColor(Color(hex: "#D4C5A0"))
                         }
                     }
                     .padding(.horizontal, 28)
-                    .frame(width: geo.size.width, height: geo.size.height, alignment: .center)
+                    .padding(.top, 20)
+                    // Keeps the action row above the floating glass tab bar
+                    .padding(.bottom, 112)
                 }
-
-                HStack(spacing: 20) {
-                    Button {
-                        let currentLiked = liked
-                        optimisticLiked = !currentLiked
-                        onToggleLike(post, currentLiked)
-                        if !currentLiked {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) { likeScale = 1.4 }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { likeScale = 1.0 }
-                            }
-                        }  
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: liked ? "heart.fill" : "heart")
-                                .font(.system(size: 26, weight: .light))
-                                .foregroundStyle(liked ? goldGradient : LinearGradient(colors: [Color(hex: "#D8C898")], startPoint: .top, endPoint: .bottom))
-                                .scaleEffect(likeScale)
-                            Text("\(displayCount)")
-                                .font(.system(size: 16, weight: .regular))
-                                .monospacedDigit()
-                                .foregroundColor(liked ? goldAccent : Color(hex: "#D8C898"))
-                        }
-                    }
-
-                    if post.authorUID != uid {
-                        Button { onStartChat(post) } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: "bubble.left")
-                                    .font(.system(size: 17, weight: .light))
-                                Text("Chat privately")
-                                    .font(.system(size: 16, weight: .regular))
-                                    .tracking(0.3)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 22)
-                            .padding(.vertical, 12)
-                            .background(goldGradient)
-                            .clipShape(Capsule())
-                        }
-                    }
-                    
-                    Spacer()
-
-                    Menu {
-                        Button(role: .destructive) { showReport = true } label: {
-                            Label("Report Post", systemImage: "flag")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: 18, weight: .light))
-                            .foregroundColor(Color(hex: "#D8C898"))
-                    }
+            }
+            .fullScreenCover(item: Binding(
+                get: { selectedImageURL.map { FullScreenImageItem(url: $0) } },
+                set: { selectedImageURL = $0?.url }
+            )) { item in
+                FullScreenImageView(imageURL: item.url) {
+                    selectedImageURL = nil
                 }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 20)
-                .padding(.bottom, 80)
             }
         }
         .onChange(of: post.likedBy) {
-            if let optimistic = optimisticLiked, post.likedBy.contains(uid) == optimistic {
-                optimisticLiked = nil
-            }
+            // Server state caught up — drop the optimistic override
+            optimisticLiked = nil
         }
         .alert("Report this post?", isPresented: $showReport) {
             Button("Report", role: .destructive) { }
@@ -310,220 +431,123 @@ struct SinglePostView: View {
         } message: {
             Text("Thank you for helping keep this space safe.")
         }
-        .fullScreenCover(isPresented: Binding(
-            get: { selectedImageURL != nil },
-            set: { if !$0 { selectedImageURL = nil } }
-        )) {
-            if let urlStr = selectedImageURL, let url = URL(string: urlStr) {
-                ImageViewerSheet(url: url) { selectedImageURL = nil }
-            }
-        }
     }
 }
 
-// MARK: - Full Screen Image Viewer
-
-private struct ImageViewerSheet: View {
-    let url: URL
-    let onDismiss: () -> Void
+// MARK: - 图片网格（放大版）
+struct ImageGridView: View {
+    let imageURLs: [String]
+    let onImageTap: (String) -> Void
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let img):
-                    img.resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                default:
-                    ProgressView().tint(.white)
-                }
-            }
-            Button { onDismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(12)
-                    .background(Color.white.opacity(0.25))
-                    .clipShape(Circle())
-            }
-            .padding(.top, 56)
-            .padding(.trailing, 20)
-        }
-        .ignoresSafeArea()
-    }
-}
+        let columns = [
+            GridItem(.flexible(), spacing: 12),
+            GridItem(.flexible(), spacing: 12)
+        ]
 
-// MARK: - Sparkle Background
-
-private struct SparkleParticle {
-    let x: CGFloat
-    let y: CGFloat
-    let outerR: CGFloat
-    let isStar: Bool
-    let phase: Double
-    let phase2: Double
-    let duration: Double
-    let duration2: Double
-    let colorIndex: Int
-
-    static let palette: [Color] = [
-        Color(hex: "#EDD870"),
-        Color(hex: "#F0E088"),
-        Color(hex: "#F4E8A0"),
-        Color(hex: "#F8F0C0"),
-        Color(hex: "#EAD878"),
-    ]
-
-    func opacity(at date: Date) -> Double {
-        let t = date.timeIntervalSinceReferenceDate
-        let a = sin((t / duration  + phase)  * .pi * 2)
-        let b = sin((t / duration2 + phase2) * .pi * 2)
-        // Multiply the positive halves of two sine waves: a particle only brightens
-        // when both waves crest at the same time, so most particles are dark most of the time.
-        let v = max(0.0, a) * max(0.0, b)
-        return pow(v, 1.5)
-    }
-}
-
-struct SparkleBackground: View {
-    // Generated once for the app's lifetime — building these in `init` would
-    // reshuffle the whole starfield every time the feed re-renders (e.g. on a like).
-    private static let particles: [SparkleParticle] = makeParticles(count: 2500)
-
-    private static func makeParticles(count: Int) -> [SparkleParticle] {
-        var rng = SystemRandomNumberGenerator()
-        return (0..<count).map { i in
-            let isStar = i % 3 == 0
-            // Power distribution: concentrates particles toward the top of the screen.
-            // rawY is uniform [0,1]; raising it to 1.8 skews values toward 0 (top).
-            let rawY = CGFloat.random(in: 0.0...1.0, using: &rng)
-            let y = pow(rawY, 1.8) * 0.52
-            return SparkleParticle(
-                x:          CGFloat.random(in: 0.02...0.98, using: &rng),
-                y:          y,
-                outerR:     isStar
-                                ? CGFloat.random(in: 4.0...8.0,  using: &rng)
-                                : CGFloat.random(in: 1.5...3.0,  using: &rng),
-                isStar:     isStar,
-                phase:      Double.random(in: 0...1,        using: &rng),
-                phase2:     Double.random(in: 0...1,        using: &rng),
-                // Tiered durations (in seconds): 10% fast, 25% medium, 65% slow.
-                // Mixing speeds gives a natural starfield feel — most stars breathe
-                // slowly, a few flicker quickly.
-                duration:   {
-                    let r = Double.random(in: 0...1, using: &rng)
-                    if r < 0.10 { return Double.random(in: 5.0...8.0,   using: &rng) }
-                    if r < 0.35 { return Double.random(in: 10.0...18.0, using: &rng) }
-                    return          Double.random(in: 20.0...40.0, using: &rng)
-                }(),
-                duration2:  {
-                    let r = Double.random(in: 0...1, using: &rng)
-                    if r < 0.10 { return Double.random(in: 3.0...6.0,   using: &rng) }
-                    if r < 0.35 { return Double.random(in: 7.0...13.0,  using: &rng) }
-                    return          Double.random(in: 14.0...28.0, using: &rng)
-                }(),
-                colorIndex: Int.random(in: 0..<5,           using: &rng)
-            )
-        }
-    }
-
-    var body: some View {
-        ZStack {
-            Color.white
-            TimelineView(.animation(minimumInterval: 0.05)) { timeline in
-                Canvas { context, size in
-                    for p in Self.particles {
-                        let raw     = p.opacity(at: timeline.date)
-                        let yFade   = max(0.0, 1.0 - p.y / 0.48)
-                        let opacity = raw * yFade
-                        guard opacity > 0.08 else { continue }
-
-                        let cx    = p.x * size.width
-                        let cy    = p.y * size.height
-                        let color = SparkleParticle.palette[p.colorIndex].opacity(opacity)
-
-                        if p.isStar {
-                            context.draw(
-                                Text("✦")
-                                    .font(.system(size: p.outerR * 2))
-                                    .foregroundStyle(color),
-                                at: CGPoint(x: cx, y: cy),
-                                anchor: .center
-                            )
-                        } else {
-                            let r = p.outerR
-                            context.fill(
-                                Path(ellipseIn: CGRect(x: cx-r, y: cy-r, width: r*2, height: r*2)),
-                                with: .color(color)
-                            )
+        LazyVGrid(columns: columns, spacing: 12) {
+            ForEach(imageURLs, id: \.self) { urlString in
+                if let url = URL(string: urlString) {
+                    Button {
+                        onImageTap(urlString)
+                    } label: {
+                        // Downsampled decode — full-res AsyncImage here got the app
+                        // jetsam-killed once a few photo posts were on screen
+                        RemoteImageView(url: url, maxPixelSize: 600) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 160, height: 160)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            case .failure:
+                                Color.gray.opacity(0.3)
+                                    .frame(width: 160, height: 160)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .overlay(
+                                        Image(systemName: "photo")
+                                            .font(.system(size: 40))
+                                            .foregroundColor(.gray)
+                                    )
+                            case .loading:
+                                Color.gray.opacity(0.3)
+                                    .frame(width: 160, height: 160)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                                    .overlay(ProgressView())
+                            }
                         }
                     }
                 }
             }
         }
-        .ignoresSafeArea()
     }
 }
 
-// MARK: - Preview
+// MARK: - 全屏图片查看器
+struct FullScreenImageView: View {
+    let imageURL: String
+    let onDismiss: () -> Void
 
-#Preview("Full feed") {
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if let url = URL(string: imageURL) {
+                RemoteImageView(url: url, maxPixelSize: 1600) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    case .failure:
+                        VStack(spacing: 12) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 50))
+                                .foregroundColor(.white.opacity(0.5))
+                            Text("Failed to load image")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                    case .loading:
+                        ProgressView()
+                            .tint(.white)
+                    }
+                }
+            }
+
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(.white.opacity(0.8))
+                            .padding()
+                    }
+                }
+                Spacer()
+            }
+        }
+    }
+}
+
+// MARK: - 辅助类型
+struct FullScreenImageItem: Identifiable {
+    let id = UUID()
+    let url: String
+}
+
+#Preview {
     FeedView(
         posts: [
-            Post(title: "Feeling grateful", bodyText: "Had a wonderful day today and wanted to share the vibes.", imageURLs: [
-                "https://picsum.photos/id/10/400/400",
-                "https://picsum.photos/id/20/400/400",
-                "https://picsum.photos/id/30/400/400",
-                "https://picsum.photos/id/40/400/400",
-                "https://picsum.photos/id/50/400/400",
-            ], authorUID: "preview", tags: ["grateful", "happy"]),
-            Post(title: "Can't sleep", bodyText: "Anyone else up late? #sad #anxious", authorUID: "preview", tags: ["sad", "anxious"]),
-        ],
-        tags: [
-            AppState.TagCount(tag: "happy", count: 2),
-            AppState.TagCount(tag: "grateful", count: 1),
-            AppState.TagCount(tag: "sad", count: 1),
+            Post(title: "Feeling grateful", bodyText: "Had a wonderful day today and wanted to share the vibes.", authorUID: "preview", tags: ["😄", "🍚🥄"]),
+            Post(title: "Can't sleep", bodyText: "Anyone else up late thinking about everything?", authorUID: "preview", tags: ["😴", "🌙"]),
+            Post(title: "New here", bodyText: "Just downloaded this app. Excited to connect.", authorUID: "preview")
         ],
         uid: "preview",
         onStartChat: { _ in },
         onToggleLike: { _, _ in }
     )
-    .background(Color(hex: "#FAF6EE"))
-}
-
-#Preview("Single post with images") {
-    SinglePostView(
-        post: Post(
-            title: "Feeling grateful",
-            bodyText: "Had a wonderful day today and wanted to share the vibes with everyone here.",
-            imageURLs: [
-                "https://picsum.photos/id/10/400/400",
-                "https://picsum.photos/id/20/400/400",
-                "https://picsum.photos/id/30/400/400",
-                "https://picsum.photos/id/40/400/400",
-                "https://picsum.photos/id/50/400/400",
-            ],
-            authorUID: "preview"
-        ),
-        uid: "preview",
-        onStartChat: { _ in },
-        onToggleLike: { _, _ in }
-    )
-    .background(Color(hex: "#FAF6EE"))
-}
-
-#Preview("Single post text only") {
-    SinglePostView(
-        post: Post(
-            title: "Can't sleep",
-            bodyText: "Anyone else up late tonight? #sad #anxious",
-            authorUID: "preview"
-        ),
-        uid: "preview",
-        onStartChat: { _ in },
-        onToggleLike: { _, _ in }
-    )
-    .background(Color(hex: "#FAF6EE"))
 }

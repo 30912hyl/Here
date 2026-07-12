@@ -28,29 +28,25 @@ private let cpGoldGradient = LinearGradient(
 
 struct CreatePostView: View {
     @Environment(\.dismiss) private var dismiss
-    let onSubmit: (String, String, [UIImage], [String], Bool) async -> Void     
+    let onSubmit: (String, String, [UIImage], [String], Bool) async -> Void
 
     @State private var title = ""
     @State private var bodyText = ""
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var images: [UIImage] = []
-    @State private var imageLoadTask: Task<Void, Never>? = nil
     @State private var isUploading = false
-    @State private var selectedTags: [String] = []
-    @State private var customTagInput = ""
+    @State private var tags: [String] = []
+    @State private var tagInput = ""
     @State private var onlyForMe = false
 
-    // warm/positive tags first, heavier ones further back
-    private let presetTags = [
-        "happy", "grateful", "excited", "proud",
-        "hopeful", "lonely", "anxious", "confused",
-        "sad", "vent", "advice"
-    ]
+    private let presetTags = ["😄", "😢", "🥰", "😡", "😴", "🍚", "☕️", "🎮", "🎵", "✨"]
+    private let maxTags = 10
 
     private var isValid: Bool {
-        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let b = bodyText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !t.isEmpty && !b.isEmpty
+        let hasTitle = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasText = !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasImages = !images.isEmpty
+        return hasTitle && (hasText || hasImages)
     }
 
     var body: some View {
@@ -68,6 +64,7 @@ struct CreatePostView: View {
                             .frame(width: 40, height: 40)
                     }
                     .buttonStyle(.plain)
+                    .disabled(isUploading)
 
                     Spacer()
 
@@ -105,12 +102,15 @@ struct CreatePostView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 14) {
 
-                        // Prompt
-                        Text("dear stranger bestie,")
-                            .font(.system(size: 28, weight: .thin))
-                            .foregroundColor(cpBrownText)
-                            .padding(.horizontal, 26)
-                            .padding(.bottom, 6)
+                        // Prompt — "stranger" in a light gold to match the app palette
+                        (
+                            Text("dear ").foregroundColor(cpBrownText)
+                            + Text("stranger").foregroundColor(Color(hex: "#E9CF8B"))
+                            + Text(" bestie,").foregroundColor(cpBrownText)
+                        )
+                        .font(.system(size: 28, weight: .thin))
+                        .padding(.horizontal, 26)
+                        .padding(.bottom, 6)
 
                         // ── Title card ───────────────────────────────────
                         VStack(alignment: .leading, spacing: 10) {
@@ -205,6 +205,7 @@ struct CreatePostView: View {
                                                     .frame(width: 90, height: 90)
                                                     .clipShape(RoundedRectangle(cornerRadius: 12))
                                                 Button {
+                                                    images.remove(at: idx)
                                                     selectedItems.remove(at: idx)
                                                 } label: {
                                                     Image(systemName: "xmark.circle.fill")
@@ -228,7 +229,7 @@ struct CreatePostView: View {
                         )
                         .padding(.horizontal, 24)
 
-                        // ── Tags card (optional) ─────────────────────────
+                        // ── Tags card (emoji only, optional) ─────────────
                         VStack(alignment: .leading, spacing: 14) {
                             HStack {
                                 Text("TAGS")
@@ -240,20 +241,18 @@ struct CreatePostView: View {
 
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 8) {
-                                    ForEach(presetTags, id: \.self) { tag in
-                                        let on = selectedTags.contains(tag)
-                                        Button { toggleTag(tag) } label: {
-                                            Text("#\(tag)")
-                                                .font(.system(size: 13, weight: .medium))
-                                                .foregroundStyle(on ? Color.white : cpGoldAccent)
-                                                .padding(.horizontal, 13)
-                                                .padding(.vertical, 7)
+                                    ForEach(presetTags, id: \.self) { emoji in
+                                        let on = tags.contains(emoji)
+                                        Button { toggleTag(emoji) } label: {
+                                            Text(emoji)
+                                                .font(.system(size: 22))
+                                                .padding(7)
                                                 .background {
                                                     if on {
-                                                        Capsule().fill(cpGoldGradient)
+                                                        Circle().fill(cpGoldGradient)
                                                     } else {
-                                                        Capsule().fill(Color.white)
-                                                            .overlay(Capsule().strokeBorder(cpGoldAccent, lineWidth: 1))
+                                                        Circle().fill(Color.white)
+                                                            .overlay(Circle().strokeBorder(cpGoldAccent.opacity(0.5), lineWidth: 1))
                                                     }
                                                 }
                                         }
@@ -268,29 +267,32 @@ struct CreatePostView: View {
                                 Image(systemName: "plus.circle")
                                     .foregroundStyle(cpGoldAccent)
                                     .font(.system(size: 16))
-                                TextField("add your own tag", text: $customTagInput)
+                                TextField("add your own — emoji only, like 😄 or 🍚🥄", text: $tagInput)
                                     .font(.system(size: 15))
                                     .foregroundColor(cpBrownText)
                                     .tint(cpGoldAccent)
-                                    .autocorrectionDisabled()
-                                    .textInputAutocapitalization(.never)
-                                    .onSubmit { addCustomTag() }
-                                if !customTagInput.trimmingCharacters(in: .whitespaces).isEmpty {
-                                    Button("Add") { addCustomTag() }
+                                    .onChange(of: tagInput) { _, newValue in
+                                        let filtered = newValue.emojiOnly
+                                        if filtered != newValue { tagInput = filtered }
+                                    }
+                                    .onSubmit { commitTagInput() }
+                                if !tagInput.isEmpty {
+                                    Button("Add") { commitTagInput() }
                                         .font(.system(size: 14))
                                         .foregroundStyle(cpGoldAccent)
+                                        .disabled(tags.count >= maxTags)
                                 }
                             }
 
-                            if !selectedTags.isEmpty {
+                            if !tags.isEmpty {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 6) {
-                                        ForEach(selectedTags, id: \.self) { tag in
+                                        ForEach(tags, id: \.self) { tag in
                                             HStack(spacing: 4) {
                                                 Text("#\(tag)")
-                                                    .font(.system(size: 13, weight: .medium))
+                                                    .font(.system(size: 14, weight: .medium))
                                                 Button {
-                                                    selectedTags.removeAll { $0 == tag }
+                                                    tags.removeAll { $0 == tag }
                                                 } label: {
                                                     Image(systemName: "xmark")
                                                         .font(.system(size: 10, weight: .bold))
@@ -355,66 +357,66 @@ struct CreatePostView: View {
                             ? "this stays safe with you — no one else will ever see it"
                             : "this post will automatically be archived after 48 hours"
                         )
-                        .font(.system(size: 13, weight: .light))
-                        .foregroundColor(cpMutedGold.opacity(0.85))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 4)
-                        .animation(.easeInOut(duration: 0.2), value: onlyForMe)
+                            .font(.system(size: 13, weight: .light))
+                            .foregroundColor(cpMutedGold.opacity(0.85))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 4)
+                            .animation(.easeInOut(duration: 0.2), value: onlyForMe)
 
                         Spacer(minLength: 40)
                     }
                     .padding(.top, 4)
                 }
+                .scrollDismissesKeyboard(.interactively)
             }
         }
         .onChange(of: selectedItems) {
-            imageLoadTask?.cancel()
-            imageLoadTask = Task {
-                var loaded: [UIImage] = []
+            Task {
+                images = []
                 for item in selectedItems {
-                    guard !Task.isCancelled else { return }
+                    // Downsample at load: ten full-res 12MP picks would hold
+                    // ~460MB of decoded bitmaps and get the app killed. 1600px
+                    // is plenty for feed display and keeps uploads small.
                     if let data = try? await item.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: data) {
-                        loaded.append(uiImage)
+                       let uiImage = UIImage.downsampled(data: data, maxPixelSize: 1600) {
+                        images.append(uiImage)
                     }
                 }
-                guard !Task.isCancelled else { return }
-                images = loaded
             }
         }
     }
 
     private func submitPost() async {
         isUploading = true
-        await onSubmit( // title, bodyText, images, tags, isPrivate
+        await onSubmit(
             title.trimmingCharacters(in: .whitespacesAndNewlines),
             bodyText.trimmingCharacters(in: .whitespacesAndNewlines),
             images,
-            selectedTags,
+            tags,
             onlyForMe
         )
         isUploading = false
         dismiss()
     }
 
-    private func toggleTag(_ tag: String) {
-        if selectedTags.contains(tag) {
-            selectedTags.removeAll { $0 == tag }
-        } else {
-            selectedTags.append(tag)
-        }
+    private func commitTagInput() {
+        addTag(tagInput)
+        tagInput = ""
     }
 
-    private func addCustomTag() {
-        let tag = customTagInput
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .replacingOccurrences(of: "#", with: "")
-            .replacingOccurrences(of: " ", with: "")
-        customTagInput = ""
-        guard !tag.isEmpty, !selectedTags.contains(tag) else { return }
-        selectedTags.append(tag)
+    private func addTag(_ raw: String) {
+        let tag = raw.emojiOnly
+        guard !tag.isEmpty, !tags.contains(tag), tags.count < maxTags else { return }
+        tags.append(tag)
+    }
+
+    private func toggleTag(_ emoji: String) {
+        if let idx = tags.firstIndex(of: emoji) {
+            tags.remove(at: idx)
+        } else {
+            addTag(emoji)
+        }
     }
 }
 

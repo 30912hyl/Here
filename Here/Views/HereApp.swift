@@ -26,6 +26,9 @@ struct HereApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(authService)
+                // The design is light-only (hardcoded white cards / gold text);
+                // dark mode made default-colored text invisible
+                .preferredColorScheme(.light)
                 .task {
                     await authService.signInAnonymously()
                 }

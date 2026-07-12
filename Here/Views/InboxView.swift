@@ -4,6 +4,9 @@ import SwiftUI
 struct InboxView: View {
     @ObservedObject var app: AppState
     @Binding var navigateToThreadId: String?
+    // Tells ContentView to hide the floating tab bar while a chat is open,
+    // otherwise it covers the message input bar.
+    @Binding var isChatOpen: Bool
 
     @State private var navigationPath = NavigationPath()
 
@@ -37,6 +40,7 @@ struct InboxView: View {
                         }
                     }
 
+                    // Ended
                     if !endedThreads.isEmpty {
                         ForEach(endedThreads) { thread in
                             NavigationLink(value: thread.id ?? "") {
@@ -51,7 +55,6 @@ struct InboxView: View {
             .listStyle(.plain)
             .background(Color.white)
             .navigationTitle("Chats")
-            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { threadId in
                 if let thread = app.threads.first(where: { $0.id == threadId }) {
                     ChatDetailView(thread: thread, app: app)
@@ -59,7 +62,15 @@ struct InboxView: View {
             }
         }
         .onChange(of: navigateToThreadId) { tryNavigate() }
+        // Threads arrive async — retry the pending navigation once the new thread lands
         .onChange(of: app.threads) { tryNavigate() }
+        .onAppear { tryNavigate() }
+        .onChange(of: navigationPath.count) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isChatOpen = navigationPath.count > 0
+            }
+        }
+        .onDisappear { isChatOpen = false }
     }
 }
 
@@ -69,6 +80,7 @@ struct ThreadCard: View {
     let isEnded: Bool
     @ObservedObject var app: AppState
 
+    // 假设未读数，之后可以加到 ChatThread model 里
     let unreadCount: Int = 0
 
     var lastMessage: String {
@@ -78,7 +90,7 @@ struct ThreadCard: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#C9A84C"), Color(hex: "#E8CC7A"), Color(hex: "#B8922E")],
+            colors: [Color(hex: "#DDBE74")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -86,6 +98,7 @@ struct ThreadCard: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
+            // 左侧金色竖线
             RoundedRectangle(cornerRadius: 2)
                 .fill(isEnded
                       ? LinearGradient(colors: [Color(hex: "#E8E0CC")], startPoint: .top, endPoint: .bottom)
@@ -110,6 +123,7 @@ struct ThreadCard: View {
 
             Spacer()
 
+            // 未读角标 / ended标记
             if isEnded {
                 Text("ended")
                     .font(.system(size: 10, weight: .light))
@@ -131,6 +145,25 @@ struct ThreadCard: View {
     }
 }
 
+
+
 #Preview {
-    InboxView(app: AppState(authService: AuthService()), navigateToThreadId: .constant(nil))
+//     NavigationStack {
+//         InboxView(
+//             threads: .constant([
+//                 ChatThread(title: "Wandering Soul", messages: [
+//                     ChatMessage(text: "hey, your post really resonated with me", isMe: false)
+//                 ], ttlSeconds: AppState.chatTTL),
+//                 ChatThread(title: "Quiet Rain", messages: [
+//                     ChatMessage(text: "thank you for listening", isMe: true)
+//                 ], ttlSeconds: 0, isManuallyFrozen: true)
+//             ]),
+//             isFrozenNow: { thread in
+//                 thread.isManuallyFrozen || Date() >= thread.expiresAt
+//             },
+//             onSend: { _, _ in },
+//             onManualFreeze: { _ in }
+//         )
+//     }
+    InboxView(app: AppState(authService: AuthService()), navigateToThreadId: .constant(nil), isChatOpen: .constant(false))
 }
