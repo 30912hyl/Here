@@ -27,6 +27,7 @@ struct ContentView: View {
                 app.startListening()
             }
             KeyboardDismisser.install()
+            KeyboardWarmer.warm()
         }
         .onChange(of: authService.isSignedIn) {
             print("isSignedIn changed to: \(authService.isSignedIn)")
@@ -272,6 +273,25 @@ private final class KeyboardDismisser: NSObject, UIGestureRecognizerDelegate {
         guard let responderView = UIResponder.currentFirst as? UIView else { return false }
         let location = touch.location(in: responderView)
         return !responderView.bounds.insetBy(dx: -8, dy: -8).contains(location)
+    }
+}
+
+// MARK: - Keyboard Warmer
+// iOS initializes the keyboard process lazily on the first focus of a session,
+// which makes the first real text-field tap feel slow and the first keystrokes
+// lag. Focusing and immediately resigning an offscreen field at launch pays
+// that cost up front, before the user ever taps a field.
+private enum KeyboardWarmer {
+    static func warm() {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap({ $0.windows })
+            .first(where: { $0.isKeyWindow }) else { return }
+        let field = UITextField(frame: CGRect(x: -100, y: -100, width: 10, height: 10))
+        window.addSubview(field)
+        field.becomeFirstResponder()
+        field.resignFirstResponder()
+        field.removeFromSuperview()
     }
 }
 

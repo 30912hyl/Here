@@ -6,6 +6,11 @@ struct ChatDetailView: View {
 
     @State private var input = ""
     @State private var showEndedActions = false
+    @FocusState private var inputFocused: Bool
+
+    /// Scroll target that sits after the message list's bottom padding, so
+    /// programmatic scrolls land exactly where a manual swipe-to-bottom rests.
+    private static let bottomAnchorId = "bottomAnchor"
 
     private var uid: String { app.uid }
     private var threadId: String { thread.id ?? "" }
@@ -46,22 +51,22 @@ struct ChatDetailView: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id(Self.bottomAnchorId)
                     }
                     .defaultScrollAnchor(.bottom)
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages.count) {
-                        if let lastId = messages.last?.id {
-                            withAnimation { proxy.scrollTo(lastId, anchor: .bottom) }
-                        }
+                        withAnimation { proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom) }
                     }
                     .onAppear {
                         // Messages are usually loaded before this view is pushed, so
                         // onChange never fires; the tab-bar hide animation also shifts
                         // layout after defaultScrollAnchor applies. Jump after layout.
-                        if let lastId = messages.last?.id {
-                            DispatchQueue.main.async {
-                                proxy.scrollTo(lastId, anchor: .bottom)
-                            }
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
                         }
                     }
                 }
@@ -136,6 +141,7 @@ struct ChatDetailView: View {
                 // white text on the white capsule
                 .foregroundColor(.black)
                 .tint(Color(hex: "#C9A84C"))
+                .focused($inputFocused)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Color.white)
@@ -144,6 +150,10 @@ struct ChatDetailView: View {
                     Capsule()
                         .stroke(Color(hex: "#E8E0CC"), lineWidth: 1)
                 )
+                // The padding ring around the TextField is part of the visible pill
+                // but not tappable by default — taps there felt like dead taps
+                .contentShape(Capsule())
+                .onTapGesture { inputFocused = true }
 
             Button {
                 let text = input
