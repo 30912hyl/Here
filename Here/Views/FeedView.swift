@@ -451,7 +451,9 @@ struct ImageGridView: View {
                     Button {
                         onImageTap(urlString)
                     } label: {
-                        AsyncImage(url: url) { phase in
+                        // Downsampled decode — full-res AsyncImage here got the app
+                        // jetsam-killed once a few photo posts were on screen
+                        RemoteImageView(url: url, maxPixelSize: 600) { phase in
                             switch phase {
                             case .success(let image):
                                 image
@@ -468,13 +470,11 @@ struct ImageGridView: View {
                                             .font(.system(size: 40))
                                             .foregroundColor(.gray)
                                     )
-                            case .empty:
+                            case .loading:
                                 Color.gray.opacity(0.3)
                                     .frame(width: 160, height: 160)
                                     .clipShape(RoundedRectangle(cornerRadius: 16))
                                     .overlay(ProgressView())
-                            @unknown default:
-                                EmptyView()
                             }
                         }
                     }
@@ -494,7 +494,7 @@ struct FullScreenImageView: View {
             Color.black.ignoresSafeArea()
 
             if let url = URL(string: imageURL) {
-                AsyncImage(url: url) { phase in
+                RemoteImageView(url: url, maxPixelSize: 1600) { phase in
                     switch phase {
                     case .success(let image):
                         image
@@ -508,11 +508,9 @@ struct FullScreenImageView: View {
                             Text("Failed to load image")
                                 .foregroundColor(.white.opacity(0.7))
                         }
-                    case .empty:
+                    case .loading:
                         ProgressView()
                             .tint(.white)
-                    @unknown default:
-                        EmptyView()
                     }
                 }
             }

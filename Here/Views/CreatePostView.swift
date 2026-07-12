@@ -375,8 +375,11 @@ struct CreatePostView: View {
             Task {
                 images = []
                 for item in selectedItems {
+                    // Downsample at load: ten full-res 12MP picks would hold
+                    // ~460MB of decoded bitmaps and get the app killed. 1600px
+                    // is plenty for feed display and keeps uploads small.
                     if let data = try? await item.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: data) {
+                       let uiImage = UIImage.downsampled(data: data, maxPixelSize: 1600) {
                         images.append(uiImage)
                     }
                 }
