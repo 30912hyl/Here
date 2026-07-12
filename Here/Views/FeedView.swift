@@ -266,6 +266,7 @@ struct SinglePostView: View {
     @State private var showReport = false
     @State private var selectedImageURL: String? = nil
     @State private var optimisticLiked: Bool? = nil
+    @State private var showBurstHeart = false
 
     private var liked: Bool { optimisticLiked ?? post.likedBy.contains(uid) }
     private var displayCount: Int {
@@ -346,14 +347,7 @@ struct SinglePostView: View {
                             optimisticLiked = !currentLiked
                             onToggleLike(post, currentLiked)
                             if !currentLiked {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
-                                    likeScale = 1.4
-                                }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                        likeScale = 1.0
-                                    }
-                                }
+                                popLikeButton()
                             }
                         } label: {
                             HStack(spacing: 6) {
@@ -411,7 +405,19 @@ struct SinglePostView: View {
                     // Keeps the action row above the floating glass tab bar
                     .padding(.bottom, 112)
                 }
+
+                if showBurstHeart {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 96))
+                        .foregroundStyle(goldGradient)
+                        .shadow(color: Color(hex: "#D0AC5F").opacity(0.35), radius: 12, y: 4)
+                        .transition(.scale(scale: 0.4).combined(with: .opacity))
+                        .allowsHitTesting(false)
+                }
             }
+            // Buttons and image tiles consume their own taps, so this only fires
+            // on the post's background/text — double-tap there likes (never unlikes)
+            .onTapGesture(count: 2) { doubleTapLike() }
             .fullScreenCover(item: Binding(
                 get: { selectedImageURL.map { FullScreenImageItem(url: $0) } },
                 set: { selectedImageURL = $0?.url }
@@ -430,6 +436,36 @@ struct SinglePostView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("Thank you for helping keep this space safe.")
+        }
+    }
+
+    // MARK: Like helpers
+
+    private func popLikeButton() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) {
+            likeScale = 1.4
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                likeScale = 1.0
+            }
+        }
+    }
+
+    private func doubleTapLike() {
+        // Like-only: double-tapping an already-liked post just replays the burst
+        if !liked {
+            optimisticLiked = true
+            onToggleLike(post, false)
+            popLikeButton()
+        }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.55)) {
+            showBurstHeart = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            withAnimation(.easeOut(duration: 0.25)) {
+                showBurstHeart = false
+            }
         }
     }
 }
