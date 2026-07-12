@@ -4,6 +4,9 @@ import SwiftUI
 struct InboxView: View {
     @ObservedObject var app: AppState
     @Binding var navigateToThreadId: String?
+    // Tells ContentView to hide the floating tab bar while a chat is open,
+    // otherwise it covers the message input bar.
+    @Binding var isChatOpen: Bool
 
     @State private var navigationPath = NavigationPath()
 
@@ -62,6 +65,12 @@ struct InboxView: View {
         // Threads arrive async — retry the pending navigation once the new thread lands
         .onChange(of: app.threads) { tryNavigate() }
         .onAppear { tryNavigate() }
+        .onChange(of: navigationPath.count) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isChatOpen = navigationPath.count > 0
+            }
+        }
+        .onDisappear { isChatOpen = false }
     }
 }
 
@@ -156,5 +165,5 @@ struct ThreadCard: View {
 //             onManualFreeze: { _ in }
 //         )
 //     }
-    InboxView(app: AppState(authService: AuthService()), navigateToThreadId: .constant(nil))
+    InboxView(app: AppState(authService: AuthService()), navigateToThreadId: .constant(nil), isChatOpen: .constant(false))
 }

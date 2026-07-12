@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var showCreateSheet = false
     @State private var heartBeating = false
     @State private var navigateToThreadId: String? = nil
+    @State private var isChatOpen = false
 
     @StateObject private var app = AppState(authService: AuthService())
 
@@ -68,12 +69,14 @@ struct ContentView: View {
                         }
                     )
                 case .inbox:
-                    InboxView(app: app, navigateToThreadId: $navigateToThreadId)
+                    InboxView(app: app, navigateToThreadId: $navigateToThreadId, isChatOpen: $isChatOpen)
                 case .profile:
                     ProfileView()
                 }
             }
 
+            // Hidden while a chat thread is open so it doesn't cover the message input
+            if !isChatOpen {
             HStack(spacing: 0) {
                 CustomTabItem(
                     iconDefault: "waveform",
@@ -135,6 +138,8 @@ struct ContentView: View {
             .glassTabBar()
             .padding(.horizontal, 14)
             .padding(.bottom, 6)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .fullScreenCover(isPresented: $showCreateSheet) {
             CreatePostView(onSubmit: { title, bodyText, images, tags, isPrivate in
