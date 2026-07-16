@@ -58,6 +58,20 @@ struct FeedView: View {
             }
         } else {
             ZStack(alignment: .top) {
+                // 背景放在滚动层下面,翻页时保持不动
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(hex: "#F7E7CE"), location: 0.0),
+                        .init(color: Color(hex: "#FFFFFF"), location: 0.5)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+
+                StarryBackgroundView()
+                    .ignoresSafeArea()
+
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 0) {
                         ForEach(filteredPosts) { post in
@@ -293,18 +307,6 @@ struct SinglePostView: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                LinearGradient(
-                    stops: [
-                        .init(color: Color(hex: "#F7E7CE"), location: 0.0),
-                        .init(color: Color(hex: "#FFFFFF"), location: 0.5)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-
-                StarryBackgroundView()
-
                 VStack(spacing: 0) {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 16) {
