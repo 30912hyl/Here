@@ -7,3 +7,6 @@ xcuserdata/
 
 # Firebase
 GoogleService-Info.plist
+
+# Per-developer signing (team + bundle id)
+Configs/Local.xcconfig

@@ -33,6 +33,7 @@
 		93E7A0E92F3EE40D003F6FE6 /* Here.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Here.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		93E7A0F62F3EE40F003F6FE6 /* HereTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HereTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		93E7A1002F3EE40F003F6FE6 /* HereUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HereUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		93E7AFF12F76AA10003F6FE6 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Shared.xcconfig; path = Configs/Shared.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -84,6 +85,7 @@
 		93E7A0E02F3EE40D003F6FE6 = {
 			isa = PBXGroup;
 			children = (
+				93E7AFF12F76AA10003F6FE6 /* Shared.xcconfig */,
 				93E7A0EB2F3EE40D003F6FE6 /* Here */,
 				93E7A0F92F3EE40F003F6FE6 /* HereTests */,
 				93E7A1032F3EE40F003F6FE6 /* HereUITests */,
@@ -407,12 +409,12 @@
 		};
 		93E7A10B2F3EE40F003F6FE6 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 93E7AFF12F76AA10003F6FE6 /* Shared.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = GBMC68KS5K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -425,7 +427,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.hylee.Here;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -435,12 +436,12 @@
 		};
 		93E7A10C2F3EE40F003F6FE6 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 93E7AFF12F76AA10003F6FE6 /* Shared.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = GBMC68KS5K;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -453,7 +454,6 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.hylee.Here;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

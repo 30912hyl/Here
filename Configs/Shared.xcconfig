@@ -1,0 +1,12 @@
+// Signing settings shared by the Here app target.
+// Per-developer overrides go in Configs/Local.xcconfig (gitignored):
+//
+//   DEVELOPMENT_TEAM = <your team id>
+//   PRODUCT_BUNDLE_IDENTIFIER = <your bundle id>
+//
+// If Local.xcconfig doesn't exist, the defaults below apply.
+
+DEVELOPMENT_TEAM = GBMC68KS5K
+PRODUCT_BUNDLE_IDENTIFIER = dev.hylee.Here
+
+#include? "Local.xcconfig"
