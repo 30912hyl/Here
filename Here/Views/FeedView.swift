@@ -11,15 +11,22 @@ struct FeedView: View {
 
     private var tagCounts: [TagCount] {
         var freq: [String: Int] = [:]
+        var firstSeen: [String: Int] = [:]
         for post in posts {
             // Legacy text tags may exist in Firestore — tags are emoji-only now
             for tag in post.tags where tag.isEmojiOnly {
                 freq[tag, default: 0] += 1
+                if firstSeen[tag] == nil { firstSeen[tag] = firstSeen.count }
             }
         }
+        // Dictionary order is hash-seeded and changes every launch, so ties must
+        // be broken deterministically or pills shuffle between sessions/renders
         return freq
             .map { TagCount(tag: $0.key, count: $0.value) }
-            .sorted { $0.count > $1.count }
+            .sorted {
+                if $0.count != $1.count { return $0.count > $1.count }
+                return firstSeen[$0.tag, default: .max] < firstSeen[$1.tag, default: .max]
+            }
     }
 
     private var filteredPosts: [Post] {
