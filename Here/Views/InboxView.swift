@@ -33,7 +33,7 @@ struct InboxView: View {
             List {
                 if app.threads.isEmpty {
                     Text("No conversations yet.")
-                        .foregroundStyle(Color(hex: "#D4C5A0"))
+                        .foregroundStyle(Color(hex: "#E4DCC6"))
                         .font(.system(size: 14, weight: .light))
                         .listRowBackground(Color.white)
                 } else {
@@ -44,6 +44,7 @@ struct InboxView: View {
                             }
                             .listRowBackground(Color.white)
                             .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))
                         }
                     }
 
@@ -55,6 +56,7 @@ struct InboxView: View {
                             }
                             .listRowBackground(Color.white)
                             .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))
                         }
                     }
                 }
@@ -94,9 +96,10 @@ struct ThreadCard: View {
         return app.messages[threadId]?.last?.text ?? "No messages yet"
     }
 
+    // 香槟白金：低饱和、带一点冷调的浅金
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#DDBE74")],
+            colors: [Color(hex: "#F7EFD8"), Color(hex: "#E6D7AC")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -110,16 +113,16 @@ struct ThreadCard: View {
                       ? LinearGradient(colors: [Color(hex: "#E8E0CC")], startPoint: .top, endPoint: .bottom)
                       : goldGradient
                 )
-                .frame(width: 2, height: 44)
+                .frame(width: 2, height: 66)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(thread.nickname)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(isEnded ? Color(hex: "#C4B89A") : Color(hex: "#2C2416"))
+                    .foregroundColor(isEnded ? Color(hex: "#DBD1B4") : Color(hex: "#2C2416"))
 
                 Text("re: \(thread.postTitle)")
                     .font(.system(size: 12, weight: .light))
-                    .foregroundColor(isEnded ? Color(hex: "#D4C9B0") : Color(hex: "#C4B89A"))
+                    .foregroundColor(isEnded ? Color(hex: "#D4C9B0") : Color(hex: "#DBD1B4"))
 
                 Text(lastMessage)
                     .font(.system(size: 13, weight: .light))
@@ -134,19 +137,28 @@ struct ThreadCard: View {
                 Text("ended")
                     .font(.system(size: 10, weight: .light))
                     .tracking(0.8)
-                    .foregroundColor(Color(hex: "#C4B89A"))
+                    .foregroundColor(Color(hex: "#DBD1B4"))
             } else if unreadCount > 0 {
-                ZStack {
-                    Circle()
-                        .fill(goldGradient)
-                        .frame(width: 20, height: 20)
-                    Text("\(unreadCount)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.white)
-                }
+                // 未读只提示"有没有":珍珠感小金珠,大而柔的高光,做页面唯一重音
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color(hex: "#FFFDF4"),
+                                Color(hex: "#F9EEC6"),
+                                Color(hex: "#EFD88E"),
+                                Color(hex: "#DDBC55")
+                            ],
+                            center: UnitPoint(x: 0.4, y: 0.35),
+                            startRadius: 0.5,
+                            endRadius: 5.5
+                        )
+                    )
+                    .frame(width: 10, height: 10)
+                    .shadow(color: Color(hex: "#D0AC5F").opacity(0.35), radius: 2, y: 1)
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .padding(.horizontal, 4)
     }
 }
