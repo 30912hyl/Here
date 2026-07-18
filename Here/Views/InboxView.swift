@@ -22,7 +22,8 @@ struct InboxView: View {
 
     private func tryNavigate() {
         guard let threadId = navigateToThreadId,
-              app.threads.contains(where: { $0.id == threadId }) else { return }
+              app.threads.contains(where: { $0.id == threadId })
+                || app.draftThread?.id == threadId else { return }
         navigationPath = NavigationPath()
         navigationPath.append(threadId)
         navigateToThreadId = nil
@@ -63,7 +64,8 @@ struct InboxView: View {
             .background(Color.white)
             .navigationTitle("Chats")
             .navigationDestination(for: String.self) { threadId in
-                if let thread = app.threads.first(where: { $0.id == threadId }) {
+                if let thread = app.threads.first(where: { $0.id == threadId })
+                    ?? (app.draftThread?.id == threadId ? app.draftThread : nil) {
                     ChatDetailView(thread: thread, app: app)
                 }
             }

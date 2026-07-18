@@ -82,6 +82,8 @@ struct ChatDetailView: View {
                         if PushManager.shared.activeThreadId == threadId {
                             PushManager.shared.activeThreadId = nil
                         }
+                        // Left without ever sending — the unsent draft evaporates
+                        app.discardDraft(threadId: threadId)
                     }
                 }
 
