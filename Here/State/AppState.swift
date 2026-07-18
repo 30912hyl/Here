@@ -17,6 +17,11 @@ final class AppState: ObservableObject {
     @Published var threads: [ChatThread] = []
     @Published var messages: [String: [ChatMessage]] = [:]  // threadId -> messages
 
+    /// A chat the sender has opened but not yet written in. Lives only on this
+    /// device — nothing is created in Firestore (so the other person sees
+    /// nothing) until the first message is sent. Discarded if they back out.
+    @Published var draftThread: ChatThread?
+
     var uid: String { authService.uid ?? "" }
 
     init(authService: AuthService) {
@@ -112,7 +117,8 @@ final class AppState: ObservableObject {
 
     /// Stamps "read up to now" for the current user on a thread.
     func markThreadRead(threadId: String) async {
-        guard !uid.isEmpty else { return }
+        // Drafts have no Firestore document yet — nothing to stamp
+        guard !uid.isEmpty, threads.contains(where: { $0.id == threadId }) else { return }
         do {
             try await db.collection("threads").document(threadId).updateData([
                 "lastRead.\(uid)": Timestamp(date: Date())
@@ -205,7 +211,11 @@ final class AppState: ObservableObject {
 
     // MARK: - Threads
 
-    func createThreadFromPost(_ post: Post) async -> String? {
+    /// Opens a chat for a post WITHOUT creating anything in Firestore.
+    /// Returns the thread id to navigate to: an existing conversation, the
+    /// current draft, or a brand-new draft with its document id reserved
+    /// up front so navigation stays stable when it's materialized later.
+    func startChat(from post: Post) -> String? {
         guard !uid.isEmpty, post.id != nil else { return nil }
 
         // Don't chat with yourself
@@ -221,40 +231,55 @@ final class AppState: ObservableObject {
             return existing.id
         }
 
-        let thread = ChatThread(
+        // Re-enter the unsent draft for this post instead of making another
+        if let draft = draftThread, draft.postId == post.id {
+            return draft.id
+        }
+
+        let ref = db.collection("threads").document()
+        draftThread = ChatThread(
+            id: ref.documentID,
             postId: post.id,
             postTitle: post.title,
             participants: [uid, post.authorUID]
         )
+        return ref.documentID
+    }
 
-        do {
-            let ref = try db.collection("threads").addDocument(from: thread)
-
-            // Add an initial system message
-            let msg = ChatMessage(
-                text: "Started from: \"\(post.title)\"",
-                senderUID: "system"
-            )
-            try ref.collection("messages").addDocument(from: msg)
-
-            return ref.documentID
-        } catch {
-            print("Error creating thread: \(error.localizedDescription)")
-            return nil
-        }
+    /// Throws away the unsent draft (called when the sender leaves the chat
+    /// without writing anything).
+    func discardDraft(threadId: String) {
+        guard draftThread?.id == threadId else { return }
+        draftThread = nil
     }
 
     func sendMessage(threadId: String, text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        // Check if frozen
-        guard let thread = threads.first(where: { $0.id == threadId }),
+        let isDraft = draftThread?.id == threadId
+
+        // Check if frozen (drafts are never frozen — they were just created)
+        guard let thread = threads.first(where: { $0.id == threadId })
+                ?? (isDraft ? draftThread : nil),
               !thread.isFrozen() else { return }
 
-        let msg = ChatMessage(text: trimmed, senderUID: uid)
-
         do {
+            // First message in a draft: create the real thread now. This is the
+            // moment the conversation appears on the other person's device.
+            if isDraft {
+                try db.collection("threads").document(threadId).setData(from: thread)
+                let sys = ChatMessage(
+                    text: "Started from: \"\(thread.postTitle)\"",
+                    senderUID: "system"
+                )
+                try db.collection("threads").document(threadId)
+                    .collection("messages")
+                    .addDocument(from: sys)
+                draftThread = nil
+            }
+
+            let msg = ChatMessage(text: trimmed, senderUID: uid)
             try db.collection("threads").document(threadId)
                 .collection("messages")
                 .addDocument(from: msg)

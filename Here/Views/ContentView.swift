@@ -74,11 +74,11 @@ struct ContentView: View {
                         posts: app.posts.filter { !$0.isPrivate || $0.authorUID == app.uid },
                         uid: app.uid,
                         onStartChat: { post in
-                            Task {
-                                if let threadId = await app.createThreadFromPost(post) {
-                                    navigateToThreadId = threadId
-                                    selectedTab = .inbox
-                                }
+                            // Opens a local draft — nothing exists in Firestore
+                            // (or on the other phone) until a message is sent
+                            if let threadId = app.startChat(from: post) {
+                                navigateToThreadId = threadId
+                                selectedTab = .inbox
                             }
                         },
                         onToggleLike: { post, alreadyLiked in
