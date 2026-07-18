@@ -1,5 +1,6 @@
 import SwiftUI
 import FirebaseFirestore
+import UserNotifications
 
 @MainActor
 final class AppState: ObservableObject {
@@ -69,6 +70,7 @@ final class AppState: ObservableObject {
                         self.listenToMessages(threadId: threadId)
                     }
                 }
+                self.syncBadge()
             }
     }
 
@@ -80,7 +82,45 @@ final class AppState: ObservableObject {
                 guard let docs = snapshot?.documents else { return }
                 let msgs = docs.compactMap { try? $0.data(as: ChatMessage.self) }
                 self?.messages[threadId] = msgs
+                self?.syncBadge()
             }
+    }
+
+    // MARK: - Unread
+
+    func unreadCount(in thread: ChatThread) -> Int {
+        guard let threadId = thread.id, !uid.isEmpty else { return 0 }
+        let lastRead = thread.lastRead[uid] ?? .distantPast
+        return (messages[threadId] ?? [])
+            .filter { $0.senderUID != uid && $0.senderUID != "system" && $0.createdAt > lastRead }
+            .count
+    }
+
+    /// iMessage-style: number of conversations with unread messages,
+    /// not the total message count.
+    var unreadThreadCount: Int {
+        threads.filter { unreadCount(in: $0) > 0 }.count
+    }
+
+    /// Stamps "read up to now" for the current user on a thread.
+    func markThreadRead(threadId: String) async {
+        guard !uid.isEmpty else { return }
+        do {
+            try await db.collection("threads").document(threadId).updateData([
+                "lastRead.\(uid)": Timestamp(date: Date())
+            ])
+        } catch {
+            print("Error marking thread read: \(error.localizedDescription)")
+        }
+    }
+
+    /// Mirrors the unread-conversation count onto the app icon and the
+    /// server-side counter that push notifications use for their badge number.
+    private func syncBadge() {
+        let total = unreadThreadCount
+        UNUserNotificationCenter.current().setBadgeCount(total, withCompletionHandler: nil)
+        guard !uid.isEmpty else { return }
+        db.collection("users").document(uid).setData(["unreadTotal": total], merge: true)
     }
 
     // MARK: - Tags

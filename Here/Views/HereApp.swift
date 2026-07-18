@@ -13,7 +13,23 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         FirebaseApp.configure()
+        PushManager.shared.configure()
         return true
+    }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        PushManager.shared.apnsTokenReceived(deviceToken)
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        // Expected on the simulator; harmless there
+        print("APNs registration failed: \(error.localizedDescription)")
     }
 }
 
@@ -31,6 +47,10 @@ struct HereApp: App {
                 .preferredColorScheme(.light)
                 .task {
                     await authService.signInAnonymously()
+                    if let uid = authService.uid {
+                        PushManager.shared.userSignedIn(uid: uid)
+                    }
+                    PushManager.shared.requestPermissionAndRegister()
                 }
         }
     }

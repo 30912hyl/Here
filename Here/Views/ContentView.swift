@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var heartBeating = false
     @State private var navigateToThreadId: String? = nil
     @State private var isChatOpen = false
+    @ObservedObject private var push = PushManager.shared
 
     @StateObject private var app = AppState(authService: AuthService())
 
@@ -38,6 +39,13 @@ struct ContentView: View {
         }
         .onDisappear {
             app.stopListening()
+        }
+        .onChange(of: push.tappedThreadId) {
+            // User tapped a message notification — jump into that conversation
+            guard let threadId = push.tappedThreadId else { return }
+            push.tappedThreadId = nil
+            navigateToThreadId = threadId
+            selectedTab = .inbox
         }
     }
 
@@ -124,7 +132,8 @@ struct ContentView: View {
                     iconSelected: "envelope.open",
                     label: "Chats",
                     tab: .inbox,
-                    selected: $selectedTab
+                    selected: $selectedTab,
+                    badge: app.unreadThreadCount
                 )
                 CustomTabItem(
                     iconDefault: "person.icloud",
@@ -181,6 +190,7 @@ struct CustomTabItem: View {
     let label: String
     let tab: MainTab
     @Binding var selected: MainTab
+    var badge: Int = 0
 
     var isSelected: Bool { selected == tab }
 
@@ -206,6 +216,17 @@ struct CustomTabItem: View {
                 Image(systemName: isSelected ? iconSelected : iconDefault)
                     .font(.system(size: 20, weight: .light))
                     .foregroundStyle(isSelected ? goldGradient : dimGoldGradient)
+                    .overlay(alignment: .topTrailing) {
+                        if badge > 0 {
+                            Text(badge > 99 ? "99+" : "\(badge)")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(goldGradient))
+                                .offset(x: 12, y: -8)
+                        }
+                    }
 
                 Text(label)
                     .font(.system(size: 10, weight: .regular))

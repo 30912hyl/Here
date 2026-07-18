@@ -33,7 +33,7 @@ struct InboxView: View {
                     if !activeThreads.isEmpty {
                         ForEach(activeThreads) { thread in
                             NavigationLink(value: thread.id ?? "") {
-                                ThreadCard(thread: thread, isEnded: false, app: app)
+                                ThreadCard(thread: thread, isEnded: false, app: app, unreadCount: app.unreadCount(in: thread))
                             }
                             .listRowBackground(Color.white)
                             .listRowSeparator(.hidden)
@@ -44,7 +44,7 @@ struct InboxView: View {
                     if !endedThreads.isEmpty {
                         ForEach(endedThreads) { thread in
                             NavigationLink(value: thread.id ?? "") {
-                                ThreadCard(thread: thread, isEnded: true, app: app)
+                                ThreadCard(thread: thread, isEnded: true, app: app, unreadCount: app.unreadCount(in: thread))
                             }
                             .listRowBackground(Color.white)
                             .listRowSeparator(.hidden)
@@ -80,8 +80,7 @@ struct ThreadCard: View {
     let isEnded: Bool
     @ObservedObject var app: AppState
 
-    // 假设未读数，之后可以加到 ChatThread model 里
-    let unreadCount: Int = 0
+    let unreadCount: Int
 
     var lastMessage: String {
         let threadId = thread.id ?? ""

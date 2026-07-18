@@ -9,4 +9,12 @@
 DEVELOPMENT_TEAM = GBMC68KS5K
 PRODUCT_BUNDLE_IDENTIFIER = dev.hylee.Here
 
+// Push notifications need the paid Apple Developer Program — free personal
+// teams can't sign the aps-environment entitlement, so it's off by default.
+// On a paid team, enable it here (or in Local.xcconfig):
+//
+//   HERE_PUSH_ENTITLEMENTS = Here/Here.entitlements
+//
+HERE_PUSH_ENTITLEMENTS =
+
 #include? "Local.xcconfig"

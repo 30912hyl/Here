@@ -60,6 +60,8 @@ struct ChatDetailView: View {
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages.count) {
                         withAnimation { proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom) }
+                        // Still in the thread — anything that just arrived counts as read
+                        Task { await app.markThreadRead(threadId: threadId) }
                     }
                     .onAppear {
                         // Messages are usually loaded before this view is pushed, so
@@ -67,6 +69,13 @@ struct ChatDetailView: View {
                         // layout after defaultScrollAnchor applies. Jump after layout.
                         DispatchQueue.main.async {
                             proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+                        }
+                        PushManager.shared.activeThreadId = threadId
+                        Task { await app.markThreadRead(threadId: threadId) }
+                    }
+                    .onDisappear {
+                        if PushManager.shared.activeThreadId == threadId {
+                            PushManager.shared.activeThreadId = nil
                         }
                     }
                 }
