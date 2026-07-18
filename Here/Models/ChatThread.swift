@@ -43,6 +43,7 @@ struct ChatThread: Identifiable, Codable, Equatable {
     var hasExtendedOnce: Bool
     var continueChoices: [String: String]  // [uid: "undecided"/"yes"/"no"]
     var nickname: String
+    var lastRead: [String: Date]  // [uid: last time that user opened this thread]
 
     init(
         id: String? = nil,
@@ -62,6 +63,7 @@ struct ChatThread: Identifiable, Codable, Equatable {
         self.isManuallyFrozen = false
         self.hasExtendedOnce = false
         self.nickname = nickname
+        self.lastRead = [:]
         var choices: [String: String] = [:]
         for uid in participants {
             choices[uid] = ContinueChoice.undecided.rawValue
@@ -118,7 +120,7 @@ struct ChatThread: Identifiable, Codable, Equatable {
     // Custom decoder so old Firestore documents without `nickname`/`postId` still decode.
     enum CodingKeys: String, CodingKey {
         case id, postId, postTitle, participants, createdAt, expiresAt
-        case isManuallyFrozen, hasExtendedOnce, continueChoices, nickname
+        case isManuallyFrozen, hasExtendedOnce, continueChoices, nickname, lastRead
     }
 
     init(from decoder: Decoder) throws {
@@ -134,6 +136,7 @@ struct ChatThread: Identifiable, Codable, Equatable {
         hasExtendedOnce  = (try? c.decode(Bool.self,              forKey: .hasExtendedOnce))  ?? false
         continueChoices  = (try? c.decode([String: String].self,  forKey: .continueChoices))  ?? [:]
         nickname         = (try? c.decode(String.self,            forKey: .nickname))          ?? ChatThread.generateNickname(seed: docId.wrappedValue)
+        lastRead         = (try? c.decode([String: Date].self,    forKey: .lastRead))          ?? [:]
     }
 }
 
