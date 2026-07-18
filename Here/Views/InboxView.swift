@@ -10,8 +10,15 @@ struct InboxView: View {
 
     @State private var navigationPath = NavigationPath()
 
-    var activeThreads: [ChatThread] { app.threads.filter { !$0.isFrozen() } }
-    var endedThreads: [ChatThread] { app.threads.filter { $0.isFrozen() } }
+    // Most recently active conversations first, like iMessage
+    var activeThreads: [ChatThread] {
+        app.threads.filter { !$0.isFrozen() }
+            .sorted { app.lastActivity(of: $0) > app.lastActivity(of: $1) }
+    }
+    var endedThreads: [ChatThread] {
+        app.threads.filter { $0.isFrozen() }
+            .sorted { app.lastActivity(of: $0) > app.lastActivity(of: $1) }
+    }
 
     private func tryNavigate() {
         guard let threadId = navigateToThreadId,

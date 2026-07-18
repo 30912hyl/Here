@@ -88,6 +88,13 @@ final class AppState: ObservableObject {
 
     // MARK: - Unread
 
+    /// When the conversation last had activity — its newest message, or the
+    /// thread's creation time before anyone has written.
+    func lastActivity(of thread: ChatThread) -> Date {
+        guard let threadId = thread.id else { return thread.createdAt }
+        return messages[threadId]?.last?.createdAt ?? thread.createdAt
+    }
+
     func unreadCount(in thread: ChatThread) -> Int {
         guard let threadId = thread.id, !uid.isEmpty else { return 0 }
         let lastRead = thread.lastRead[uid] ?? .distantPast
