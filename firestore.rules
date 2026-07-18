@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// Deploy with: firebase deploy --only firestore:rules
+// (or paste into Firebase Console → Firestore → Rules)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /posts/{postId} {
+      // NOTE: private ("just for me") posts are currently filtered client-side
+      // only — the feed queries the whole collection, so read access must stay
+      // collection-wide. Locking isPrivate posts down server-side requires
+      // changing the app's queries first.
+      allow read: if signedIn();
+      // You can only create posts as yourself
+      allow create: if signedIn()
+        && request.resource.data.authorUID == request.auth.uid;
+      // Author can edit their post; everyone else may only touch like fields
+      allow update: if signedIn() && (
+        resource.data.authorUID == request.auth.uid ||
+        request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly(['likeCount', 'likedBy'])
+      );
+      allow delete: if signedIn()
+        && resource.data.authorUID == request.auth.uid;
+    }
+
+    match /threads/{threadId} {
+      // Only the two participants can see or update a conversation
+      allow read, update: if signedIn()
+        && request.auth.uid in resource.data.participants;
+      // You can only create a thread you are part of
+      allow create: if signedIn()
+        && request.auth.uid in request.resource.data.participants;
+
+      match /messages/{messageId} {
+        allow read, create: if signedIn()
+          && request.auth.uid in
+            get(/databases/$(database)/documents/threads/$(threadId))
+              .data.participants;
+      }
+    }
+
+    // fcmToken + unreadTotal live here. Only the owner may touch their doc —
+    // otherwise anyone could overwrite someone else's push token and receive
+    // their message notifications. (The Cloud Function uses the Admin SDK,
+    // which bypasses rules, so it still works.)
+    match /users/{userId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+  }
+}

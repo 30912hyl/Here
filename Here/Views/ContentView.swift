@@ -29,6 +29,7 @@ struct ContentView: View {
             }
             KeyboardDismisser.install()
             KeyboardWarmer.warm()
+            routePendingNotificationTap()
         }
         .onChange(of: authService.isSignedIn) {
             print("isSignedIn changed to: \(authService.isSignedIn)")
@@ -41,12 +42,19 @@ struct ContentView: View {
             app.stopListening()
         }
         .onChange(of: push.tappedThreadId) {
-            // User tapped a message notification — jump into that conversation
-            guard let threadId = push.tappedThreadId else { return }
-            push.tappedThreadId = nil
-            navigateToThreadId = threadId
-            selectedTab = .inbox
+            routePendingNotificationTap()
         }
+    }
+
+    /// Jump into the conversation whose notification was tapped. Called from
+    /// onChange for taps while running, and from onAppear because a tap that
+    /// cold-launches the app can set tappedThreadId before this view exists —
+    /// onChange alone would never see it.
+    private func routePendingNotificationTap() {
+        guard let threadId = push.tappedThreadId else { return }
+        push.tappedThreadId = nil
+        navigateToThreadId = threadId
+        selectedTab = .inbox
     }
 
     private var mainTabView: some View {

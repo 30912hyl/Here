@@ -36,6 +36,7 @@ final class AppState: ObservableObject {
         messageListeners.values.forEach { $0.remove() }
         messageListeners.removeAll()
         messages.removeAll()
+        lastSyncedBadge = nil
     }
 
     private func listenToPosts() {
@@ -121,12 +122,18 @@ final class AppState: ObservableObject {
         }
     }
 
+    private var lastSyncedBadge: Int?
+
     /// Mirrors the unread-conversation count onto the app icon and the
     /// server-side counter that push notifications use for their badge number.
+    /// Every message listener calls this, so skip when nothing changed —
+    /// otherwise app launch fires a burst of identical Firestore writes.
     private func syncBadge() {
-        let total = unreadThreadCount
-        UNUserNotificationCenter.current().setBadgeCount(total, withCompletionHandler: nil)
         guard !uid.isEmpty else { return }
+        let total = unreadThreadCount
+        guard total != lastSyncedBadge else { return }
+        lastSyncedBadge = total
+        UNUserNotificationCenter.current().setBadgeCount(total, withCompletionHandler: nil)
         db.collection("users").document(uid).setData(["unreadTotal": total], merge: true)
     }
 

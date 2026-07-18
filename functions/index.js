@@ -34,6 +34,11 @@ exports.notifyNewMessage = onDocumentCreated(
       // Badge counts unread CONVERSATIONS (like iMessage), so only bump it
       // when this thread flips from read to unread — i.e. the new message is
       // the only unread one from the other participant.
+      //
+      // Known race: two near-simultaneous messages can each see themselves as
+      // the first unread one and double-bump the badge. Accepted — the client
+      // rewrites the exact count whenever the recipient opens the app, so any
+      // drift is short-lived and cosmetic (badge number on the lock screen).
       const lastRead = (thread.lastRead || {})[recipient];
       let recentQuery = db.collection(`threads/${threadId}/messages`)
           .orderBy("createdAt", "desc")

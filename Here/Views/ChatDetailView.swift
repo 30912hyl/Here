@@ -60,8 +60,13 @@ struct ChatDetailView: View {
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages.count) {
                         withAnimation { proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom) }
-                        // Still in the thread — anything that just arrived counts as read
-                        Task { await app.markThreadRead(threadId: threadId) }
+                        // Still in the thread — anything that just arrived counts as
+                        // read. Own/system messages never count as unread, so don't
+                        // burn a Firestore write re-stamping lastRead for them.
+                        if let last = messages.last,
+                           last.senderUID != uid, last.senderUID != "system" {
+                            Task { await app.markThreadRead(threadId: threadId) }
+                        }
                     }
                     .onAppear {
                         // Messages are usually loaded before this view is pushed, so
