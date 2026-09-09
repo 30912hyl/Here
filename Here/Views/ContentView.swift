@@ -7,9 +7,12 @@ struct ContentView: View {
     @State private var lastNonCreateTab: MainTab = .feed
     @State private var showCreateSheet = false
     @State private var heartBeating = false
+    // 0 = A缎面乳白, 1 = C纯轮廓, 2 = D原版流动金边
+    @AppStorage("createHeartStyle") private var createHeartStyle = 0
     @State private var navigateToThreadId: String? = nil
     @State private var isChatOpen = false
     @ObservedObject private var push = PushManager.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var app = AppState(authService: AuthService())
 
@@ -44,6 +47,13 @@ struct ContentView: View {
         .onChange(of: push.tappedThreadId) {
             routePendingNotificationTap()
         }
+        .onChange(of: scenePhase) {
+            // "Open to connect" means while I'm in the app — drop out on
+            // background rather than sit in the count from a pocket.
+            if scenePhase != .active {
+                app.voice.appDidLeaveForeground()
+            }
+        }
     }
 
     /// Jump into the conversation whose notification was tapped. Called from
@@ -67,7 +77,7 @@ struct ContentView: View {
             Group {
                 switch selectedTab {
                 case .voice:
-                    VoiceView()
+                    VoiceView(voice: app.voice)
                 case .feed, .create:
                     FeedView(
                         // Private ("just for me") posts exist in Firestore — never show them to others
@@ -110,30 +120,21 @@ struct ContentView: View {
                     selected: $selectedTab
                 )
 
-                Button {
-                    startHeartbeat()
-                    showCreateSheet = true
-                } label: {
-                    ZStack {
-                        // 乳白内里 + 流动金边
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 44, weight: .thin))
-                            .foregroundStyle(GoldShimmer.milk)
-                        Image(systemName: "heart")
-                            .font(.system(size: 44, weight: .regular))
-                            .foregroundStyle(
-                                AngularGradient(
-                                    gradient: Gradient(colors: GoldShimmer.softColors),
-                                    center: .center,
-                                    angle: .degrees(210)
-                                )
-                            )
-                    }
-                    .shadow(color: Color(hex: "#D0AC5F").opacity(0.15), radius: 5, y: 2)
+                // 试装期:长按在 A缎面 / C纯轮廓 / D原版 之间循环,定稿后删掉切换
+                createHeart
                     .scaleEffect(heartBeating ? 1.25 : 1.0)
-                    
-                }
-                .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        startHeartbeat()
+                        showCreateSheet = true
+                    }
+                    .onLongPressGesture {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            createHeartStyle = (createHeartStyle + 1) % 3
+                        }
+                    }
 
                 CustomTabItem(
                     iconDefault: "envelope",
@@ -163,6 +164,64 @@ struct ContentView: View {
             CreatePostView(onSubmit: { title, bodyText, images, tags, isPrivate in
                 await app.addPost(title: title, bodyText: bodyText, images: images, tags: tags, isPrivate: isPrivate)
             })
+        }
+    }
+
+    @ViewBuilder
+    var createHeart: some View {
+        switch createHeartStyle {
+        case 1:
+            // C 纯轮廓:极简细线香槟金
+            Image(systemName: "heart")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color(hex: "#E9D9AC"), Color(hex: "#D9BE79"), Color(hex: "#EADCB2")],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: Color(hex: "#D0AC5F").opacity(0.12), radius: 4, y: 2)
+        case 2:
+            // D 原版:乳白内里 + 流动金边
+            ZStack {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 44, weight: .thin))
+                    .foregroundStyle(GoldShimmer.milk)
+                Image(systemName: "heart")
+                    .font(.system(size: 44, weight: .regular))
+                    .foregroundStyle(
+                        AngularGradient(
+                            gradient: Gradient(colors: GoldShimmer.softColors),
+                            center: .center,
+                            angle: .degrees(210)
+                        )
+                    )
+            }
+            .shadow(color: Color(hex: "#D0AC5F").opacity(0.15), radius: 5, y: 2)
+        default:
+            // A 缎面乳白:哑光竖向缎面 + 发丝金边
+            ZStack {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 44, weight: .thin))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "#FFFEF9"), Color(hex: "#FBF5E4"), Color(hex: "#F3E7C6")],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Image(systemName: "heart")
+                    .font(.system(size: 44, weight: .ultraLight))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(hex: "#EFE1B8"), Color(hex: "#DFC584"), Color(hex: "#EBDAA9")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .shadow(color: Color(hex: "#D0AC5F").opacity(0.12), radius: 4, y: 2)
         }
     }
 

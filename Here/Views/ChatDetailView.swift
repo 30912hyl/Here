@@ -146,6 +146,22 @@ struct ChatDetailView: View {
         }
     }
 
+    // MARK: - Sending
+
+    /// Single send path for the arrow button and the keyboard's Send key.
+    ///
+    /// Issue #14: the field sometimes kept its text after sending. Clearing the
+    /// binding synchronously can be overwritten by UIKit committing pending
+    /// autocorrect/marked text (e.g. pinyin composition) in the same run loop,
+    /// so the clear is applied again on the next turn of the loop.
+    private func send() {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        input = ""
+        DispatchQueue.main.async { input = "" }
+        Task { await app.sendMessage(threadId: threadId, text: text) }
+    }
+
     // MARK: - Input Bar
     private var chatInputBar: some View {
         HStack(spacing: 12) {
@@ -156,6 +172,8 @@ struct ChatDetailView: View {
                 .foregroundColor(.black)
                 .tint(Color(hex: "#C9A84C"))
                 .focused($inputFocused)
+                .submitLabel(.send)
+                .onSubmit { send() }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Color.white)
@@ -170,9 +188,7 @@ struct ChatDetailView: View {
                 .onTapGesture { inputFocused = true }
 
             Button {
-                let text = input
-                input = ""
-                Task { await app.sendMessage(threadId: threadId, text: text) }
+                send()
             } label: {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 15, weight: .medium))

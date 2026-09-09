@@ -59,5 +59,16 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
+
+    // Voice "open to connect" presence. Kept separate from /users so the
+    // count query can read everyone without exposing push tokens.
+    // { available: bool, lastSeen: server timestamp }
+    match /voicePresence/{userId} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == userId
+        && request.resource.data.keys().hasOnly(['available', 'lastSeen'])
+        && request.resource.data.available is bool
+        && request.resource.data.lastSeen == request.time;
+    }
   }
 }
