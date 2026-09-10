@@ -1,8 +1,9 @@
 # Deploys Firestore rules, Storage rules and Cloud Functions whenever a
-# change to them lands on main. Needs one repository secret:
-#   FIREBASE_SERVICE_ACCOUNT — the JSON of a Firebase service-account key
-#   (Firebase console → Project settings → Service accounts → Generate new
-#   private key), pasted whole.
+# change to them lands on main. Needs ONE of these repository secrets:
+#   FIREBASE_SERVICE_ACCOUNT — JSON of a Firebase service-account key
+#     (Firebase console → Project settings → Service accounts → Generate key)
+#   FIREBASE_TOKEN — output of `firebase login:ci` run on a developer's Mac
+#     (simpler to create; set it with `gh secret set FIREBASE_TOKEN`)
 name: Firebase deploy
 
 on:
@@ -38,16 +39,22 @@ jobs:
         working-directory: functions
         run: npm install --no-audit --no-fund
 
-      - name: Write service-account credentials
+      - name: Pick credentials
         env:
           SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          CI_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
-          if [ -z "$SERVICE_ACCOUNT_JSON" ]; then
-            echo "::error::Missing repository secret FIREBASE_SERVICE_ACCOUNT"
+          if [ -n "$SERVICE_ACCOUNT_JSON" ]; then
+            printf '%s' "$SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+            echo "Using FIREBASE_SERVICE_ACCOUNT"
+          elif [ -n "$CI_TOKEN" ]; then
+            echo "FIREBASE_TOKEN=$CI_TOKEN" >> "$GITHUB_ENV"
+            echo "Using FIREBASE_TOKEN"
+          else
+            echo "::error::Set repository secret FIREBASE_SERVICE_ACCOUNT or FIREBASE_TOKEN"
             exit 1
           fi
-          printf '%s' "$SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/sa.json"
-          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
 
       - name: Deploy rules + functions
         run: firebase deploy --only firestore:rules,storage,functions --project here-a6817 --non-interactive --force
