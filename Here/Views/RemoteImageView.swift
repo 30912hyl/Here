@@ -28,6 +28,12 @@ extension UIImage {
     }
 }
 
+/// Transient network errors used to stick as `.failure` for the life of
+/// the view (issue #2: "post A without image, post B with image"). Retry a
+/// few times with backoff before giving up.
+/// (File-level because generic types can't hold static stored properties.)
+private let remoteImageMaxAttempts = 3
+
 enum RemoteImagePhase {
     case loading
     case success(Image)
@@ -50,17 +56,12 @@ struct RemoteImageView<Content: View>: View {
             }
     }
 
-    /// Transient network errors used to stick as `.failure` for the life of
-    /// the view (issue #2: "post A without image, post B with image"). Retry a
-    /// few times with backoff before giving up.
-    private static let maxAttempts = 3
-
     private func load() async {
         guard let url else {
             phase = .failure
             return
         }
-        for attempt in 1...Self.maxAttempts {
+        for attempt in 1...remoteImageMaxAttempts {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 if let image = UIImage.downsampled(data: data, maxPixelSize: maxPixelSize) {
@@ -71,7 +72,7 @@ struct RemoteImageView<Content: View>: View {
                 return
             } catch {
                 if Task.isCancelled { return }
-                if attempt < Self.maxAttempts {
+                if attempt < remoteImageMaxAttempts {
                     try? await Task.sleep(nanoseconds: UInt64(attempt) * 800_000_000)
                     if Task.isCancelled { return }
                 }
