@@ -1,0 +1,60 @@
+# Deploys Firestore rules, Storage rules and Cloud Functions whenever a
+# change to them lands on main. Needs ONE of these repository secrets:
+#   FIREBASE_SERVICE_ACCOUNT — JSON of a Firebase service-account key
+#     (Firebase console → Project settings → Service accounts → Generate key)
+#   FIREBASE_TOKEN — output of `firebase login:ci` run on a developer's Mac
+#     (simpler to create; set it with `gh secret set FIREBASE_TOKEN`)
+name: Firebase deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - storage.rules
+      - firebase.json
+      - functions/**
+      - .github/workflows/firebase-deploy.yml
+  workflow_dispatch:
+
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Pick credentials
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          CI_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          if [ -n "$SERVICE_ACCOUNT_JSON" ]; then
+            printf '%s' "$SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+            echo "Using FIREBASE_SERVICE_ACCOUNT"
+          elif [ -n "$CI_TOKEN" ]; then
+            echo "FIREBASE_TOKEN=$CI_TOKEN" >> "$GITHUB_ENV"
+            echo "Using FIREBASE_TOKEN"
+          else
+            echo "::error::Set repository secret FIREBASE_SERVICE_ACCOUNT or FIREBASE_TOKEN"
+            exit 1
+          fi
+
+      - name: Deploy rules + functions
+        run: firebase deploy --only firestore:rules,storage,functions --project here-a6817 --non-interactive --force

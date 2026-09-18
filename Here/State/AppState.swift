@@ -17,6 +17,10 @@ final class AppState: ObservableObject {
     @Published var threads: [ChatThread] = []
     @Published var messages: [String: [ChatMessage]] = [:]  // threadId -> messages
 
+    /// Voice tab presence ("open to connect" toggle + live count). Lives here,
+    /// not in VoiceView, so the toggle survives switching tabs.
+    let voice = VoicePresenceService()
+
     /// A chat the sender has opened but not yet written in. Lives only on this
     /// device — nothing is created in Firestore (so the other person sees
     /// nothing) until the first message is sent. Discarded if they back out.
@@ -33,9 +37,11 @@ final class AppState: ObservableObject {
     func startListening() {
         listenToPosts()
         listenToThreads()
+        voice.start(uid: uid)
     }
 
     func stopListening() {
+        voice.stop()
         postsListener?.remove()
         threadsListener?.remove()
         messageListeners.values.forEach { $0.remove() }

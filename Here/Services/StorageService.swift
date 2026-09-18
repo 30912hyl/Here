@@ -20,7 +20,12 @@ struct StorageService {
             guard let data = image.jpegData(compressionQuality: 0.7) else { continue }
 
             let ref = storage.reference().child("\(path)/\(index)_\(UUID().uuidString).jpg")
-            _ = try await ref.putDataAsync(data)
+            // putData does not infer a content type from the object name, and
+            // storage.rules only accepts image/* — without this the upload is
+            // rejected and the whole post silently fails (issue #2).
+            let metadata = StorageMetadata()
+            metadata.contentType = "image/jpeg"
+            _ = try await ref.putDataAsync(data, metadata: metadata)
             let url = try await ref.downloadURL()
             urls.append(url.absoluteString)
         }
@@ -28,39 +33,3 @@ struct StorageService {
         return urls
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

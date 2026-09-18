@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var navigateToThreadId: String? = nil
     @State private var isChatOpen = false
     @ObservedObject private var push = PushManager.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     @StateObject private var app = AppState(authService: AuthService())
 
@@ -44,6 +45,13 @@ struct ContentView: View {
         .onChange(of: push.tappedThreadId) {
             routePendingNotificationTap()
         }
+        .onChange(of: scenePhase) {
+            // "Open to connect" means while I'm in the app — drop out on
+            // background rather than sit in the count from a pocket.
+            if scenePhase != .active {
+                app.voice.appDidLeaveForeground()
+            }
+        }
     }
 
     /// Jump into the conversation whose notification was tapped. Called from
@@ -67,7 +75,7 @@ struct ContentView: View {
             Group {
                 switch selectedTab {
                 case .voice:
-                    VoiceView()
+                    VoiceView(voice: app.voice)
                 case .feed, .create:
                     FeedView(
                         // Private ("just for me") posts exist in Firestore — never show them to others
@@ -114,26 +122,36 @@ struct ContentView: View {
                     startHeartbeat()
                     showCreateSheet = true
                 } label: {
-                    ZStack {
-                        // 乳白内里 + 流动金边
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 44, weight: .thin))
-                            .foregroundStyle(GoldShimmer.milk)
-                        Image(systemName: "heart")
-                            .font(.system(size: 44, weight: .regular))
-                            .foregroundStyle(
-                                AngularGradient(
-                                    gradient: Gradient(colors: GoldShimmer.softColors),
-                                    center: .center,
-                                    angle: .degrees(210)
-                                )
-                            )
+                    // 隐形占位复制邻居的图标+标签结构,圆钮以 overlay 叠上去:
+                    // 居中于整项高度,且不撑高胶囊
+                    VStack(spacing: 5) {
+                        Color.clear.frame(height: 20)
+                        Text("Posts")
+                            .font(.system(size: 10, weight: .regular))
+                            .tracking(0.5)
+                            .hidden()
                     }
-                    .shadow(color: Color(hex: "#D0AC5F").opacity(0.15), radius: 5, y: 2)
-                    .scaleEffect(heartBeating ? 1.25 : 1.0)
-                    
+                    .frame(maxWidth: .infinity)
+                    .overlay {
+                        // 创建是"动作"不是"页面":圆环承担"按钮感",心本身保持和邻居同样的细线,
+                        // 所以它在各页面都能融进去。纯白底——米色底在白玻璃上会显脏
+                        // 两个对齐目标互相矛盾:心要对齐邻居的图标行(需上提 8.5pt),
+                        // 圆要在胶囊里居中(需不提)。0 显低、6 显高,取 3 两头各让一半;
+                        // 心 20pt 与邻居图标同尺寸
+                        ZStack {
+                            Circle()
+                                .fill(Color.white)
+                                .overlay(Circle().stroke(Color(hex: "#DDBE74"), lineWidth: 1))
+                                .frame(width: 40, height: 40)
+                            Image(systemName: "heart")
+                                .font(.system(size: 20, weight: .light))
+                                .foregroundColor(Color(hex: "#DDBE74"))
+                        }
+                        .offset(y: -3)
+                        .scaleEffect(heartBeating ? 1.25 : 1.0)
+                    }
+                    .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity)
 
                 CustomTabItem(
                     iconDefault: "envelope",
