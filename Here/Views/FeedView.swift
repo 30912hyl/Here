@@ -60,11 +60,11 @@ struct FeedView: View {
         } else {
             ZStack(alignment: .top) {
                 // 背景放在滚动层下面,翻页时保持不动
-                // 顶色要有足够的饱和度:#F7E7CE 这类低饱和米色在真机上发灰
+                // 暖奶油色:再灰一点(#F7E7CE)在真机上发闷,再黄一点(#FCE5B8)就成了"黄背景"
                 LinearGradient(
                     stops: [
-                        .init(color: Color(hex: "#FCE5B8"), location: 0.0),
-                        .init(color: Color(hex: "#FFF6E3"), location: 0.28),
+                        .init(color: Color(hex: "#FDEBD0"), location: 0.0),
+                        .init(color: Color(hex: "#FFF8EC"), location: 0.28),
                         .init(color: Color(hex: "#FFFFFF"), location: 0.55)
                     ],
                     startPoint: .top,

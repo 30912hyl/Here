@@ -146,14 +146,27 @@ struct ContentView: View {
                         // 心 20pt 与邻居图标同尺寸
                         // 实心金心:细线描边会被抗锯齿稀释成卡其灰,实心才读得出"金"。
                         // 白圆下垫一层淡金投影,让它从近白的玻璃上浮起来、读得出"白"
+                        let gold = Color(hex: "#D9AE52")
+                        // 光用比金环更亮更黄的金,才读成"光";用同一个深金会晕成褐色
+                        let light = Color(hex: "#F0C96B")
                         ZStack {
+                            // 白圆 + 从心向外发散的金色柔光:光晕垫在下面,心的内部用白色盖住,
+                            // 所以光只出现在心的轮廓之外、向圆环淡出(心里不能有深色,否则像斑)
                             Circle().fill(Color.white)
-                                .overlay(Circle().stroke(Color(hex: "#D9AE52"), lineWidth: 1))
+                                .overlay(
+                                    Circle().fill(RadialGradient(
+                                        colors: [light.opacity(0.55), light.opacity(0.18), .clear],
+                                        center: .center, startRadius: 5, endRadius: 20))
+                                )
+                                .overlay(Circle().stroke(gold, lineWidth: 1))
                                 .frame(width: 40, height: 40)
                                 .shadow(color: Color(hex: "#C9A050").opacity(0.28), radius: 3, y: 1)
                             Image(systemName: "heart.fill")
-                                .font(.system(size: 19, weight: .regular))
-                                .foregroundColor(Color(hex: "#D9AE52"))
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundColor(.white)
+                            Image(systemName: "heart")
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundColor(gold)
                         }
                         .offset(y: -3)
                         .scaleEffect(heartBeating ? 1.25 : 1.0)
