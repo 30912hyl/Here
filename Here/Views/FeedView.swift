@@ -40,7 +40,7 @@ struct FeedView: View {
     var body: some View {
         if posts.isEmpty {
             ZStack {
-                StarryBackgroundView()
+                FeedSkyBackground()
                 VStack(spacing: 16) {
                     Image(systemName: "heart")
                         .font(.system(size: 40, weight: .thin))
@@ -60,20 +60,7 @@ struct FeedView: View {
         } else {
             ZStack(alignment: .top) {
                 // 背景放在滚动层下面,翻页时保持不动
-                // 暖奶油色:再灰一点(#F7E7CE)在真机上发闷,再黄一点(#FCE5B8)就成了"黄背景"
-                LinearGradient(
-                    stops: [
-                        .init(color: Color(hex: "#FDEBD0"), location: 0.0),
-                        .init(color: Color(hex: "#FFF8EC"), location: 0.28),
-                        .init(color: Color(hex: "#FFFFFF"), location: 0.55)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-
-                StarryBackgroundView()
-                    .ignoresSafeArea()
+                FeedSkyBackground()
 
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 0) {
@@ -119,6 +106,27 @@ struct FeedView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - 背景:香槟金的天 + 白色星星
+/// 顶部是一片浅香槟金的"天",白色星星在它上面才亮得起来;往下渐变到白,星星随之淡出。
+/// 两者必须一起用:没有这片天,白星星在白底上不可见。
+struct FeedSkyBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: Color(hex: "#EFD9A8"), location: 0.0),
+                    .init(color: Color(hex: "#F9ECCB"), location: 0.28),
+                    .init(color: Color(hex: "#FFFFFF"), location: 0.55)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            StarryBackgroundView()
+        }
+        .ignoresSafeArea()
     }
 }
 

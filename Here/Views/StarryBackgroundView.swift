@@ -32,8 +32,17 @@ struct StarryBackgroundView: View {
             let scale = 0.65 + 0.35 * phase
             let drawSize = star.size * scale
 
-            // 不画光晕:浅色背景上没有东西能比底色更亮,白光晕 + 深色星体只会读成"斑点"。
-            // 这里的星星是撒在香槟色纸上的金箔碎屑,不是发光体。
+            // 白光晕:光必须比周围亮才是光,所以星星是白的,而它背后的天(FeedView 的渐变顶部)
+            // 是香槟金。别把光晕或星体换成金色——在浅底上比周围暗的"光"只会读成斑点。
+            let glowRadius = drawSize * (star.kind == .dot ? 3.0 : 1.5)
+            let glowRect = CGRect(x: star.x - glowRadius, y: star.y - glowRadius,
+                                  width: glowRadius * 2, height: glowRadius * 2)
+            context.fill(
+                Circle().path(in: glowRect),
+                with: .radialGradient(
+                    Gradient(colors: [Color.white.opacity(0.55 * brightness), .clear]),
+                    center: CGPoint(x: star.x, y: star.y), startRadius: 0, endRadius: glowRadius)
+            )
 
             // 星星本体
             var body = context
@@ -42,7 +51,7 @@ struct StarryBackgroundView: View {
 
             switch star.kind {
             case .dot:
-                body.opacity = brightness * 0.5
+                body.opacity = brightness
                 body.fill(Circle().path(in: rect), with: .color(star.color))
             case .sparkle:
                 body.rotate(by: .degrees((phase - 0.5) * 32))
@@ -96,7 +105,7 @@ struct StarryBackgroundView: View {
         ctx.fill(
             Capsule().path(in: tailRect),
             with: .linearGradient(
-                Gradient(colors: [.clear, Color(hex: "#E6BE62").opacity(0.7), Color(hex: "#DDAF4A")]),
+                Gradient(colors: [.clear, .white.opacity(0.85), .white]),
                 startPoint: CGPoint(x: -70, y: 0),
                 endPoint: CGPoint(x: 0, y: 0)
             )
@@ -111,9 +120,6 @@ struct StarryBackgroundView: View {
         let fieldHeight = size.height * 0.62
         let attempts = 130
         var generatedStars: [Star] = []
-        // 浅色背景上白星星不可见,星体用金色;四角星略深一档,更有层次
-        let dotColor = Color(hex: "#E6BE62")
-        let sparkleColor = Color(hex: "#DDAF4A")
 
         for i in 0..<attempts {
             let randomY = CGFloat.random(in: 0...fieldHeight)
@@ -133,11 +139,10 @@ struct StarryBackgroundView: View {
                 kind: kind,
                 x: CGFloat.random(in: 0...size.width),
                 y: randomY,
-                // 圆点只做极细的金粉,大了就成"痘"
                 size: kind == .dot
-                    ? CGFloat.random(in: 0.8...1.8)
+                    ? CGFloat.random(in: 1.2...2.6)
                     : CGFloat.random(in: 5...14),
-                color: kind == .dot ? dotColor : sparkleColor,
+                color: .white,
                 duration: Double.random(in: 1.8...4.2),
                 phaseOffset: Double.random(in: 0...(2 * .pi))
             ))
