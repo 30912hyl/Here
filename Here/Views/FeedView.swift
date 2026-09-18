@@ -5,7 +5,7 @@ struct FeedView: View {
     let uid: String
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
-    let onReportPost: (Post) -> Void
+    let onReportPost: (_ post: Post, _ reason: String, _ details: String) -> Void
 
     @State private var selectedTag: String? = nil
     @State private var showAllTags = false
@@ -60,10 +60,12 @@ struct FeedView: View {
         } else {
             ZStack(alignment: .top) {
                 // 背景放在滚动层下面,翻页时保持不动
+                // 顶色要有足够的饱和度:#F7E7CE 这类低饱和米色在真机上发灰
                 LinearGradient(
                     stops: [
-                        .init(color: Color(hex: "#F7E7CE"), location: 0.0),
-                        .init(color: Color(hex: "#FFFFFF"), location: 0.5)
+                        .init(color: Color(hex: "#FCE5B8"), location: 0.0),
+                        .init(color: Color(hex: "#FFF6E3"), location: 0.28),
+                        .init(color: Color(hex: "#FFFFFF"), location: 0.55)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -284,7 +286,7 @@ struct SinglePostView: View {
     let uid: String
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
-    let onReportPost: (Post) -> Void
+    let onReportPost: (_ post: Post, _ reason: String, _ details: String) -> Void
 
     @State private var likeScale = 1.0
     @State private var showReport = false
@@ -443,11 +445,13 @@ struct SinglePostView: View {
             // Server state caught up — drop the optimistic override
             optimisticLiked = nil
         }
-        .alert("Report this post?", isPresented: $showReport) {
-            Button("Report", role: .destructive) { onReportPost(post) }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("We'll review it, and you won't see this post again. Thank you for helping keep this space safe.")
+        .sheet(isPresented: $showReport) {
+            ReportSheet(
+                title: "Why are you reporting this post?",
+                message: "Your report is anonymous, and you won't see this post again."
+            ) { reason, details in
+                onReportPost(post, reason, details)
+            }
         }
     }
 
@@ -690,6 +694,6 @@ struct FullScreenImageItem: Identifiable {
         uid: "preview",
         onStartChat: { _ in },
         onToggleLike: { _, _ in },
-        onReportPost: { _ in }
+        onReportPost: { _, _, _ in }
     )
 }

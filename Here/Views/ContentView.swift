@@ -95,8 +95,8 @@ struct ContentView: View {
                         onToggleLike: { post, alreadyLiked in
                             Task { await app.toggleLike(post: post, alreadyLiked: alreadyLiked) }
                         },
-                        onReportPost: { post in
-                            Task { await app.reportPost(post) }
+                        onReportPost: { post, reason, details in
+                            Task { await app.reportPost(post, reason: reason, details: details) }
                         }
                     )
                 case .inbox:
@@ -144,14 +144,16 @@ struct ContentView: View {
                         // 两个对齐目标互相矛盾:心要对齐邻居的图标行(需上提 8.5pt),
                         // 圆要在胶囊里居中(需不提)。0 显低、6 显高,取 3 两头各让一半;
                         // 心 20pt 与邻居图标同尺寸
+                        // 实心金心:细线描边会被抗锯齿稀释成卡其灰,实心才读得出"金"。
+                        // 白圆下垫一层淡金投影,让它从近白的玻璃上浮起来、读得出"白"
                         ZStack {
-                            Circle()
-                                .fill(Color.white)
-                                .overlay(Circle().stroke(Color(hex: "#DDBE74"), lineWidth: 1))
+                            Circle().fill(Color.white)
+                                .overlay(Circle().stroke(Color(hex: "#D9AE52"), lineWidth: 1))
                                 .frame(width: 40, height: 40)
-                            Image(systemName: "heart")
-                                .font(.system(size: 20, weight: .light))
-                                .foregroundColor(Color(hex: "#DDBE74"))
+                                .shadow(color: Color(hex: "#C9A050").opacity(0.28), radius: 3, y: 1)
+                            Image(systemName: "heart.fill")
+                                .font(.system(size: 19, weight: .regular))
+                                .foregroundColor(Color(hex: "#D9AE52"))
                         }
                         .offset(y: -3)
                         .scaleEffect(heartBeating ? 1.25 : 1.0)
@@ -208,7 +210,7 @@ struct ContentView: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#DDBE74")],
+            colors: [Color(hex: "#D9AE52")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -228,7 +230,7 @@ struct CustomTabItem: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#DDBE74")],
+            colors: [Color(hex: "#D9AE52")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -251,7 +253,7 @@ struct CustomTabItem: View {
                     .overlay(alignment: .topTrailing) {
                         if badge > 0 {
                             Text(badge > 99 ? "99+" : "\(badge)")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
