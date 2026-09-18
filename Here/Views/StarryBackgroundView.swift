@@ -3,25 +3,20 @@ import SwiftUI
 // MARK: - 清爽金色渐变背景的星空
 // 用 TimelineView + Canvas 单层绘制所有星星,避免几十个 view 各自跑动画导致的卡顿。
 struct StarryBackgroundView: View {
-    @State private var stars: [Star] = []
+    // Canvas 的绘制闭包在 body 之外执行:把星星放在 @State 数组里、只在闭包中读取,
+    // SwiftUI 追踪不到依赖,画布会一直拿到初始的空数组。所以用引用类型按画布尺寸
+    // 惰性生成并缓存,绘制时直接向它要。
+    @State private var field = StarField()
 
     // 改这里切换配色：.rose / .champagne / .lemon / .cool
     let style: GoldStyle = .champagne
 
     var body: some View {
-        GeometryReader { geometry in
-            TimelineView(.animation) { timeline in
-                Canvas { context, size in
-                    let time = timeline.date.timeIntervalSinceReferenceDate
-                    drawStars(context: context, time: time)
-                    drawShootingStar(context: context, size: size, time: time)
-                }
-            }
-            .onAppear {
-                generateStars(in: geometry.size)
-            }
-            .onChange(of: geometry.size) { _, newSize in
-                generateStars(in: newSize)
+        TimelineView(.animation) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                drawStars(field.stars(for: size), context: context, time: time)
+                drawShootingStar(context: context, size: size, time: time)
             }
         }
         .allowsHitTesting(false)
@@ -29,7 +24,7 @@ struct StarryBackgroundView: View {
 
     // MARK: 星星绘制
 
-    private func drawStars(context: GraphicsContext, time: TimeInterval) {
+    private func drawStars(_ stars: [Star], context: GraphicsContext, time: TimeInterval) {
         for star in stars {
             // 0...1 的闪烁相位
             let phase = (sin(2 * .pi * time / star.duration + star.phaseOffset) + 1) / 2
@@ -37,20 +32,16 @@ struct StarryBackgroundView: View {
             let scale = 0.65 + 0.35 * phase
             let drawSize = star.size * scale
 
-            // 光晕:柔和的径向渐变,代替昂贵的 shadow
-            let glowRadius = drawSize * (star.kind == .dot ? 2.6 : 1.6)
-            let glowRect = CGRect(
-                x: star.x - glowRadius, y: star.y - glowRadius,
-                width: glowRadius * 2, height: glowRadius * 2
-            )
+            // 白光晕:光必须比周围亮才是光,所以星星是白的,而它背后的天(FeedView 的渐变顶部)
+            // 是香槟金。别把光晕或星体换成金色——在浅底上比周围暗的"光"只会读成斑点。
+            let glowRadius = drawSize * (star.kind == .dot ? 3.0 : 1.5)
+            let glowRect = CGRect(x: star.x - glowRadius, y: star.y - glowRadius,
+                                  width: glowRadius * 2, height: glowRadius * 2)
             context.fill(
                 Circle().path(in: glowRect),
                 with: .radialGradient(
-                    Gradient(colors: [star.color.opacity(0.38 * brightness), .clear]),
-                    center: CGPoint(x: star.x, y: star.y),
-                    startRadius: 0,
-                    endRadius: glowRadius
-                )
+                    Gradient(colors: [Color.white.opacity(0.55 * brightness), .clear]),
+                    center: CGPoint(x: star.x, y: star.y), startRadius: 0, endRadius: glowRadius)
             )
 
             // 星星本体
@@ -123,8 +114,8 @@ struct StarryBackgroundView: View {
 
     // MARK: 星星生成
 
-    private func generateStars(in size: CGSize) {
-        guard size.width > 0, size.height > 0 else { return }
+    fileprivate static func generateStars(in size: CGSize) -> [Star] {
+        guard size.width > 0, size.height > 0 else { return [] }
 
         let fieldHeight = size.height * 0.62
         let attempts = 130
@@ -138,8 +129,8 @@ struct StarryBackgroundView: View {
 
             let kind: Star.Kind
             switch Double.random(in: 0...1) {
-            case ..<0.16: kind = .sparkle
-            case ..<0.28: kind = .cross
+            case ..<0.38: kind = .sparkle
+            case ..<0.58: kind = .cross
             default:      kind = .dot
             }
 
@@ -149,15 +140,29 @@ struct StarryBackgroundView: View {
                 x: CGFloat.random(in: 0...size.width),
                 y: randomY,
                 size: kind == .dot
-                    ? CGFloat.random(in: 1.5...3.5)
-                    : CGFloat.random(in: 6...13),
+                    ? CGFloat.random(in: 1.2...2.6)
+                    : CGFloat.random(in: 5...14),
                 color: .white,
                 duration: Double.random(in: 1.8...4.2),
                 phaseOffset: Double.random(in: 0...(2 * .pi))
             ))
         }
 
-        self.stars = generatedStars
+        return generatedStars
+    }
+}
+
+/// 星星缓存:尺寸不变就复用同一批星星,尺寸变了(旋转、分屏)才重新生成。
+private final class StarField {
+    private var size: CGSize = .zero
+    private var cached: [Star] = []
+
+    func stars(for size: CGSize) -> [Star] {
+        if size != self.size {
+            self.size = size
+            cached = StarryBackgroundView.generateStars(in: size)
+        }
+        return cached
     }
 }
 

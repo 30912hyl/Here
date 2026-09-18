@@ -5,6 +5,7 @@ struct FeedView: View {
     let uid: String
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
+    let onReportPost: (_ post: Post, _ reason: String, _ details: String) -> Void
 
     @State private var selectedTag: String? = nil
     @State private var showAllTags = false
@@ -39,7 +40,7 @@ struct FeedView: View {
     var body: some View {
         if posts.isEmpty {
             ZStack {
-                StarryBackgroundView()
+                FeedSkyBackground()
                 VStack(spacing: 16) {
                     Image(systemName: "heart")
                         .font(.system(size: 40, weight: .thin))
@@ -59,18 +60,7 @@ struct FeedView: View {
         } else {
             ZStack(alignment: .top) {
                 // 背景放在滚动层下面,翻页时保持不动
-                LinearGradient(
-                    stops: [
-                        .init(color: Color(hex: "#F7E7CE"), location: 0.0),
-                        .init(color: Color(hex: "#FFFFFF"), location: 0.5)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-
-                StarryBackgroundView()
-                    .ignoresSafeArea()
+                FeedSkyBackground()
 
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 0) {
@@ -79,7 +69,8 @@ struct FeedView: View {
                                 post: post,
                                 uid: uid,
                                 onStartChat: onStartChat,
-                                onToggleLike: onToggleLike
+                                onToggleLike: onToggleLike,
+                                onReportPost: onReportPost
                             )
                             .containerRelativeFrame(.vertical)
                         }
@@ -115,6 +106,27 @@ struct FeedView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - 背景:香槟金的天 + 白色星星
+/// 顶部是一片浅香槟金的"天",白色星星在它上面才亮得起来;往下渐变到白,星星随之淡出。
+/// 两者必须一起用:没有这片天,白星星在白底上不可见。
+struct FeedSkyBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: Color(hex: "#EFD9A8"), location: 0.0),
+                    .init(color: Color(hex: "#F9ECCB"), location: 0.28),
+                    .init(color: Color(hex: "#FFFFFF"), location: 0.55)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            StarryBackgroundView()
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -282,6 +294,7 @@ struct SinglePostView: View {
     let uid: String
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
+    let onReportPost: (_ post: Post, _ reason: String, _ details: String) -> Void
 
     @State private var likeScale = 1.0
     @State private var showReport = false
@@ -440,11 +453,13 @@ struct SinglePostView: View {
             // Server state caught up — drop the optimistic override
             optimisticLiked = nil
         }
-        .alert("Report this post?", isPresented: $showReport) {
-            Button("Report", role: .destructive) { }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Thank you for helping keep this space safe.")
+        .sheet(isPresented: $showReport) {
+            ReportSheet(
+                title: "Why are you reporting this post?",
+                message: "Your report is anonymous, and you won't see this post again."
+            ) { reason, details in
+                onReportPost(post, reason, details)
+            }
         }
     }
 
@@ -686,6 +701,7 @@ struct FullScreenImageItem: Identifiable {
         ],
         uid: "preview",
         onStartChat: { _ in },
-        onToggleLike: { _, _ in }
+        onToggleLike: { _, _ in },
+        onReportPost: { _, _, _ in }
     )
 }

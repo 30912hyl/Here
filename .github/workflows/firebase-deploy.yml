@@ -56,5 +56,13 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy rules + functions
-        run: firebase deploy --only firestore:rules,storage,functions --project here-a6817 --non-interactive --force
+      - name: Deploy rules
+        run: firebase deploy --only firestore:rules,storage --project here-a6817 --non-interactive --force
+
+      # Cloud Functions need the Blaze plan plus the Cloud Functions, Cloud Build
+      # and Artifact Registry APIs enabled on the project. Until then this step
+      # is skipped so rules can still ship. Turn it on with:
+      #   gh variable set DEPLOY_FUNCTIONS --body true
+      - name: Deploy functions
+        if: vars.DEPLOY_FUNCTIONS == 'true'
+        run: firebase deploy --only functions --project here-a6817 --non-interactive --force
