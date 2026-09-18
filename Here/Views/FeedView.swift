@@ -5,6 +5,7 @@ struct FeedView: View {
     let uid: String
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
+    let onReportPost: (Post) -> Void
 
     @State private var selectedTag: String? = nil
     @State private var showAllTags = false
@@ -79,7 +80,8 @@ struct FeedView: View {
                                 post: post,
                                 uid: uid,
                                 onStartChat: onStartChat,
-                                onToggleLike: onToggleLike
+                                onToggleLike: onToggleLike,
+                                onReportPost: onReportPost
                             )
                             .containerRelativeFrame(.vertical)
                         }
@@ -282,6 +284,7 @@ struct SinglePostView: View {
     let uid: String
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
+    let onReportPost: (Post) -> Void
 
     @State private var likeScale = 1.0
     @State private var showReport = false
@@ -441,10 +444,10 @@ struct SinglePostView: View {
             optimisticLiked = nil
         }
         .alert("Report this post?", isPresented: $showReport) {
-            Button("Report", role: .destructive) { }
+            Button("Report", role: .destructive) { onReportPost(post) }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("Thank you for helping keep this space safe.")
+            Text("We'll review it, and you won't see this post again. Thank you for helping keep this space safe.")
         }
     }
 
@@ -686,6 +689,7 @@ struct FullScreenImageItem: Identifiable {
         ],
         uid: "preview",
         onStartChat: { _ in },
-        onToggleLike: { _, _ in }
+        onToggleLike: { _, _ in },
+        onReportPost: { _ in }
     )
 }

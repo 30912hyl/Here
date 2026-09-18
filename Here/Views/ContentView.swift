@@ -79,7 +79,10 @@ struct ContentView: View {
                 case .feed, .create:
                     FeedView(
                         // Private ("just for me") posts exist in Firestore — never show them to others
-                        posts: app.posts.filter { !$0.isPrivate || $0.authorUID == app.uid },
+                        posts: app.posts.filter {
+                            (!$0.isPrivate || $0.authorUID == app.uid)
+                                && !app.reportedPostIds.contains($0.id ?? "")
+                        },
                         uid: app.uid,
                         onStartChat: { post in
                             // Opens a local draft — nothing exists in Firestore
@@ -91,6 +94,9 @@ struct ContentView: View {
                         },
                         onToggleLike: { post, alreadyLiked in
                             Task { await app.toggleLike(post: post, alreadyLiked: alreadyLiked) }
+                        },
+                        onReportPost: { post in
+                            Task { await app.reportPost(post) }
                         }
                     )
                 case .inbox:

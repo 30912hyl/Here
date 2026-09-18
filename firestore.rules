@@ -60,6 +60,16 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
+    // Abuse reports. Write-only for clients: anyone signed in can file a
+    // report as themselves, nobody can read, edit or delete one. Moderators
+    // read them in the Firebase console (which bypasses rules).
+    match /reports/{reportId} {
+      allow create: if signedIn()
+        && request.resource.data.reporterUID == request.auth.uid
+        && request.resource.data.type in ['post', 'chat']
+        && request.resource.data.createdAt == request.time;
+    }
+
     // Voice "open to connect" presence. Kept separate from /users so the
     // count query can read everyone without exposing push tokens.
     // { available: bool, lastSeen: server timestamp }
