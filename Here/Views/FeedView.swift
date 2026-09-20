@@ -117,9 +117,9 @@ struct FeedSkyBackground: View {
         ZStack {
             LinearGradient(
                 stops: [
-                    .init(color: Color(hex: "#EFD9A8"), location: 0.0),
-                    .init(color: Color(hex: "#F9ECCB"), location: 0.28),
-                    .init(color: Color(hex: "#FFFFFF"), location: 0.55)
+                    .init(color: Color(hex: "#F3E2BC"), location: 0.0),
+                    .init(color: Color(hex: "#FBF2DC"), location: 0.26),
+                    .init(color: Color(hex: "#FFFFFF"), location: 0.50)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -425,7 +425,8 @@ struct SinglePostView: View {
                     .padding(.horizontal, 28)
                     .padding(.top, 20)
                     // Keeps the action row above the floating glass tab bar
-                    .padding(.bottom, 112)
+                    // 底栏顶边离屏幕底 77pt(21 + 56),再留 16pt 间距
+                    .padding(.bottom, 93)
                 }
 
                 if showBurstHeart {

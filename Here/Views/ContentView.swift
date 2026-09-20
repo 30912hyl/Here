@@ -178,8 +178,12 @@ struct ContentView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .glassTabBar()
-            .padding(.horizontal, 14)
-            .padding(.bottom, 6)
+            // 位置对齐 iOS 26 系统悬浮底栏(实测 Apple"文件"App):底边离屏幕底 21pt,
+            // 压进 Home 指示条那片区域,而不是停在安全区之上(那样会高出近一倍);左右各留 22pt
+            .padding(.horizontal, 22)
+            .padding(.bottom, 21)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .ignoresSafeArea(edges: .bottom)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
