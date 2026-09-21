@@ -310,14 +310,6 @@ struct SinglePostView: View {
         return max(0, post.likeCount + (optimistic ? 1 : -1))
     }
 
-    var goldGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color(hex: "#DDBE74")],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
     var body: some View {
         GeometryReader { geo in
             ZStack {
@@ -373,14 +365,19 @@ struct SinglePostView: View {
                             }
                         } label: {
                             HStack(spacing: 6) {
-                                Image(systemName: liked ? "heart.fill" : "heart")
-                                    .font(.system(size: 20, weight: .light))
-                                    .foregroundStyle(
-                                        liked
-                                        ? goldGradient
-                                        : LinearGradient(colors: [Color(hex: "#D4C5A0")], startPoint: .top, endPoint: .bottom)
-                                    )
-                                    .scaleEffect(likeScale)
+                                // 已点赞 = "白金":浅香槟白的内里 + 细金边,和 Chat privately 按钮同一套语言。
+                                // 整颗平涂实心金在白底上像一块金属片
+                                ZStack {
+                                    if liked {
+                                        Image(systemName: "heart.fill")
+                                            .font(.system(size: 20, weight: .light))
+                                            .foregroundColor(Color(hex: "#F3E3BE"))
+                                    }
+                                    Image(systemName: "heart")
+                                        .font(.system(size: 20, weight: liked ? .regular : .light))
+                                        .foregroundColor(Color(hex: liked ? "#D9AE52" : "#D4C5A0"))
+                                }
+                                .scaleEffect(likeScale)
                                 Text("\(displayCount)")
                                     .font(.system(size: 13, weight: .light))
                                     .monospacedDigit()
@@ -430,10 +427,16 @@ struct SinglePostView: View {
                 }
 
                 if showBurstHeart {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 96))
-                        .foregroundStyle(goldGradient)
-                        .shadow(color: Color(hex: "#D0AC5F").opacity(0.35), radius: 12, y: 4)
+                    // 和点赞按钮同一配方:浅香槟白内里 + 细金边
+                    ZStack {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 96, weight: .light))
+                            .foregroundColor(Color(hex: "#F3E3BE"))
+                        Image(systemName: "heart")
+                            .font(.system(size: 96, weight: .ultraLight))
+                            .foregroundColor(Color(hex: "#D9AE52"))
+                    }
+                        .shadow(color: Color(hex: "#D0AC5F").opacity(0.22), radius: 12, y: 4)
                         .transition(.scale(scale: 0.4).combined(with: .opacity))
                         .allowsHitTesting(false)
                 }

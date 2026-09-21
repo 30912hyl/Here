@@ -9,8 +9,8 @@ import SwiftUI
 //
 // 全部状态都是时间的纯函数(不存任何 @State),用 TimelineView + Canvas 单层绘制。
 struct StarryBackgroundView: View {
-    /// 星位数量。每个星位约 40% 的时间可见,所以同一时刻平均只有 3~4 颗星。
-    private static let slotCount = 10
+    /// 星位数量。每个星位约 42% 的时间可见,所以同一时刻平均有 5 颗左右。
+    private static let slotCount = 12
 
     var body: some View {
         // 30fps 足够:亮灭过程以秒计,没必要按屏幕刷新率重绘
@@ -30,8 +30,8 @@ struct StarryBackgroundView: View {
         guard size.width > 0, size.height > 0 else { return }
 
         for slot in 0..<Self.slotCount {
-            // 每个星位有自己的周期(7~16 秒)和相位,互不成整数比 → 整体不会出现可察觉的节拍
-            let cycleLength = 7.0 + 9.0 * Self.random(slot, 0, 1)
+            // 每个星位有自己的周期(12~24 秒)和相位,互不成整数比 → 整体不会出现可察觉的节拍
+            let cycleLength = 12.0 + 12.0 * Self.random(slot, 0, 1)
             let shifted = time + cycleLength * Self.random(slot, 0, 2)
             let cycle = Int(floor(shifted / cycleLength))
             let progress = shifted / cycleLength - Double(cycle)   // 0..<1
@@ -40,9 +40,12 @@ struct StarryBackgroundView: View {
             let visibleFraction = 0.30 + 0.25 * Self.random(slot, cycle, 3)
             guard progress < visibleFraction else { continue }
 
-            // 平滑的钟形包络:慢慢亮起 → 停留 → 慢慢熄灭(2~9 秒一次)
-            let envelope = sin(.pi * progress / visibleFraction)
-            let brightness = envelope * envelope * (0.65 + 0.35 * Self.random(slot, cycle, 4))
+            // 包络:慢慢亮起(40%)→ 停留(20%)→ 慢慢熄灭(40%),整个过程 4~13 秒。
+            // 亮起和熄灭用 smoothstep,起止都没有突变
+            let phase = progress / visibleFraction
+            let ramp = phase < 0.4 ? phase / 0.4 : (phase > 0.6 ? (1 - phase) / 0.4 : 1)
+            let envelope = ramp * ramp * (3 - 2 * ramp)
+            let brightness = envelope * (0.65 + 0.35 * Self.random(slot, cycle, 4))
 
             // 位置每一轮都重新抽;只落在顶部 36%——再往下天已经接近白色,白星星在那里看不见
             let x = size.width * Self.random(slot, cycle, 5)
