@@ -5,6 +5,7 @@ struct FeedView: View {
     let uid: String
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
+    let onReportPost: (_ post: Post, _ reason: String, _ details: String) -> Void
 
     @State private var selectedTag: String? = nil
     @State private var showAllTags = false
@@ -39,7 +40,7 @@ struct FeedView: View {
     var body: some View {
         if posts.isEmpty {
             ZStack {
-                StarryBackgroundView()
+                FeedSkyBackground()
                 VStack(spacing: 16) {
                     Image(systemName: "heart")
                         .font(.system(size: 40, weight: .thin))
@@ -59,18 +60,7 @@ struct FeedView: View {
         } else {
             ZStack(alignment: .top) {
                 // 背景放在滚动层下面,翻页时保持不动
-                LinearGradient(
-                    stops: [
-                        .init(color: Color(hex: "#F7E7CE"), location: 0.0),
-                        .init(color: Color(hex: "#FFFFFF"), location: 0.5)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
-
-                StarryBackgroundView()
-                    .ignoresSafeArea()
+                FeedSkyBackground()
 
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 0) {
@@ -79,7 +69,8 @@ struct FeedView: View {
                                 post: post,
                                 uid: uid,
                                 onStartChat: onStartChat,
-                                onToggleLike: onToggleLike
+                                onToggleLike: onToggleLike,
+                                onReportPost: onReportPost
                             )
                             .containerRelativeFrame(.vertical)
                         }
@@ -115,6 +106,27 @@ struct FeedView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - 背景:香槟金的天 + 白色星星
+/// 顶部是一片浅香槟金的"天",白色星星在它上面才亮得起来;往下渐变到白,星星随之淡出。
+/// 两者必须一起用:没有这片天,白星星在白底上不可见。
+struct FeedSkyBackground: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                stops: [
+                    .init(color: Color(hex: "#F3E2BC"), location: 0.0),
+                    .init(color: Color(hex: "#FBF2DC"), location: 0.26),
+                    .init(color: Color(hex: "#FFFFFF"), location: 0.50)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            StarryBackgroundView()
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -282,6 +294,7 @@ struct SinglePostView: View {
     let uid: String
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
+    let onReportPost: (_ post: Post, _ reason: String, _ details: String) -> Void
 
     @State private var likeScale = 1.0
     @State private var showReport = false
@@ -295,14 +308,6 @@ struct SinglePostView: View {
         let serverLiked = post.likedBy.contains(uid)
         guard optimistic != serverLiked else { return post.likeCount }
         return max(0, post.likeCount + (optimistic ? 1 : -1))
-    }
-
-    var goldGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color(hex: "#DDBE74")],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
     }
 
     var body: some View {
@@ -360,14 +365,19 @@ struct SinglePostView: View {
                             }
                         } label: {
                             HStack(spacing: 6) {
-                                Image(systemName: liked ? "heart.fill" : "heart")
-                                    .font(.system(size: 20, weight: .light))
-                                    .foregroundStyle(
-                                        liked
-                                        ? goldGradient
-                                        : LinearGradient(colors: [Color(hex: "#D4C5A0")], startPoint: .top, endPoint: .bottom)
-                                    )
-                                    .scaleEffect(likeScale)
+                                // 已点赞 = "白金":浅香槟白的内里 + 细金边,和 Chat privately 按钮同一套语言。
+                                // 整颗平涂实心金在白底上像一块金属片
+                                ZStack {
+                                    if liked {
+                                        Image(systemName: "heart.fill")
+                                            .font(.system(size: 20, weight: .light))
+                                            .foregroundColor(Color(hex: "#F3E3BE"))
+                                    }
+                                    Image(systemName: "heart")
+                                        .font(.system(size: 20, weight: liked ? .regular : .light))
+                                        .foregroundColor(Color(hex: liked ? "#D9AE52" : "#D4C5A0"))
+                                }
+                                .scaleEffect(likeScale)
                                 Text("\(displayCount)")
                                     .font(.system(size: 13, weight: .light))
                                     .monospacedDigit()
@@ -412,14 +422,21 @@ struct SinglePostView: View {
                     .padding(.horizontal, 28)
                     .padding(.top, 20)
                     // Keeps the action row above the floating glass tab bar
-                    .padding(.bottom, 112)
+                    // 底栏顶边离屏幕底 77pt(21 + 56),再留 16pt 间距
+                    .padding(.bottom, 93)
                 }
 
                 if showBurstHeart {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 96))
-                        .foregroundStyle(goldGradient)
-                        .shadow(color: Color(hex: "#D0AC5F").opacity(0.35), radius: 12, y: 4)
+                    // 和点赞按钮同一配方:浅香槟白内里 + 细金边
+                    ZStack {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 96, weight: .light))
+                            .foregroundColor(Color(hex: "#F3E3BE"))
+                        Image(systemName: "heart")
+                            .font(.system(size: 96, weight: .ultraLight))
+                            .foregroundColor(Color(hex: "#D9AE52"))
+                    }
+                        .shadow(color: Color(hex: "#D0AC5F").opacity(0.22), radius: 12, y: 4)
                         .transition(.scale(scale: 0.4).combined(with: .opacity))
                         .allowsHitTesting(false)
                 }
@@ -440,11 +457,13 @@ struct SinglePostView: View {
             // Server state caught up — drop the optimistic override
             optimisticLiked = nil
         }
-        .alert("Report this post?", isPresented: $showReport) {
-            Button("Report", role: .destructive) { }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Thank you for helping keep this space safe.")
+        .sheet(isPresented: $showReport) {
+            ReportSheet(
+                title: "Why are you reporting this post?",
+                message: "Your report is anonymous, and you won't see this post again."
+            ) { reason, details in
+                onReportPost(post, reason, details)
+            }
         }
     }
 
@@ -686,6 +705,7 @@ struct FullScreenImageItem: Identifiable {
         ],
         uid: "preview",
         onStartChat: { _ in },
-        onToggleLike: { _, _ in }
+        onToggleLike: { _, _ in },
+        onReportPost: { _, _, _ in }
     )
 }

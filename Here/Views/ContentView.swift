@@ -79,7 +79,10 @@ struct ContentView: View {
                 case .feed, .create:
                     FeedView(
                         // Private ("just for me") posts exist in Firestore — never show them to others
-                        posts: app.posts.filter { !$0.isPrivate || $0.authorUID == app.uid },
+                        posts: app.posts.filter {
+                            (!$0.isPrivate || $0.authorUID == app.uid)
+                                && !app.reportedPostIds.contains($0.id ?? "")
+                        },
                         uid: app.uid,
                         onStartChat: { post in
                             // Opens a local draft — nothing exists in Firestore
@@ -91,6 +94,9 @@ struct ContentView: View {
                         },
                         onToggleLike: { post, alreadyLiked in
                             Task { await app.toggleLike(post: post, alreadyLiked: alreadyLiked) }
+                        },
+                        onReportPost: { post, reason, details in
+                            Task { await app.reportPost(post, reason: reason, details: details) }
                         }
                     )
                 case .inbox:
@@ -133,19 +139,19 @@ struct ContentView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .overlay {
-                        // 创建是"动作"不是"页面":圆环承担"按钮感",心本身保持和邻居同样的细线,
-                        // 所以它在各页面都能融进去。纯白底——米色底在白玻璃上会显脏
-                        // 两个对齐目标互相矛盾:心要对齐邻居的图标行(需上提 8.5pt),
-                        // 圆要在胶囊里居中(需不提)。0 显低、6 显高,取 3 两头各让一半;
-                        // 心 20pt 与邻居图标同尺寸
+                        // 创建是"动作"不是"页面":圆环承担"按钮感",空心的心和邻居图标同尺寸(20pt)。
+                        // 纯白底 + 清晰的线,不加任何光晕:白底上的金色光晕比周围暗,只会读成污渍。
+                        // 心用 regular 粗细和较饱和的金——更细更哑的描边在真机上会被稀释成卡其灰。
+                        // 位置:心要对齐邻居的图标行(需上提 8.5pt),圆要在胶囊里居中(需不提),
+                        // 0 显低、6 显高,取 3 两头各让一半
+                        let gold = Color(hex: "#D9AE52")
                         ZStack {
-                            Circle()
-                                .fill(Color.white)
-                                .overlay(Circle().stroke(Color(hex: "#DDBE74"), lineWidth: 1))
+                            Circle().fill(Color.white)
+                                .overlay(Circle().stroke(gold, lineWidth: 1))
                                 .frame(width: 40, height: 40)
                             Image(systemName: "heart")
-                                .font(.system(size: 20, weight: .light))
-                                .foregroundColor(Color(hex: "#DDBE74"))
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundColor(gold)
                         }
                         .offset(y: -3)
                         .scaleEffect(heartBeating ? 1.25 : 1.0)
@@ -172,8 +178,12 @@ struct ContentView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .glassTabBar()
-            .padding(.horizontal, 14)
-            .padding(.bottom, 6)
+            // 位置对齐 iOS 26 系统悬浮底栏(实测 Apple"文件"App):底边离屏幕底 21pt,
+            // 压进 Home 指示条那片区域,而不是停在安全区之上(那样会高出近一倍);左右各留 22pt
+            .padding(.horizontal, 22)
+            .padding(.bottom, 21)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .ignoresSafeArea(edges: .bottom)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -202,7 +212,7 @@ struct ContentView: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#DDBE74")],
+            colors: [Color(hex: "#D9AE52")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -222,7 +232,7 @@ struct CustomTabItem: View {
 
     var goldGradient: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: "#DDBE74")],
+            colors: [Color(hex: "#D9AE52")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -245,7 +255,7 @@ struct CustomTabItem: View {
                     .overlay(alignment: .topTrailing) {
                         if badge > 0 {
                             Text(badge > 99 ? "99+" : "\(badge)")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(.system(size: 10, weight: .semibold))
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)

@@ -117,8 +117,10 @@ final class AppState: ObservableObject {
 
     /// iMessage-style: number of conversations with unread messages,
     /// not the total message count.
+    /// Ended chats are excluded: the list shows them as "ended" with no unread
+    /// dot, so counting them leaves a badge the user can never clear.
     var unreadThreadCount: Int {
-        threads.filter { unreadCount(in: $0) > 0 }.count
+        threads.filter { !$0.isFrozen() && unreadCount(in: $0) > 0 }.count
     }
 
     /// Stamps "read up to now" for the current user on a thread.
@@ -202,6 +204,43 @@ final class AppState: ObservableObject {
         }
     }
   
+    // MARK: - Reports
+
+    private static let reportedPostIdsKey = "reportedPostIds"
+
+    /// Posts this device has reported. They're hidden from the reporter's feed
+    /// right away — moderation happens later, from the Firebase console.
+    @Published private(set) var reportedPostIds: Set<String> = Set(
+        UserDefaults.standard.stringArray(forKey: AppState.reportedPostIdsKey) ?? []
+    )
+
+    /// Hides the post locally, then files a report for moderators. Clients can
+    /// create reports but never read them (see firestore.rules).
+    func reportPost(_ post: Post, reason: String, details: String) async {
+        guard let postId = post.id, !uid.isEmpty else { return }
+        // Posts expire after 48h — drop ids of posts that no longer exist so the list stays tiny
+        let liveIds = Set(posts.compactMap(\.id))
+        reportedPostIds = reportedPostIds.intersection(liveIds).union([postId])
+        UserDefaults.standard.set(Array(reportedPostIds), forKey: Self.reportedPostIdsKey)
+        do {
+            try await db.collection("reports").addDocument(data: [
+                "type": "post",
+                "postId": postId,
+                "reportedUID": post.authorUID,
+                "reporterUID": uid,
+                "reason": reason,
+                "details": details,
+                // Snapshot the content: the post itself expires and disappears
+                "title": post.title,
+                "bodyText": post.bodyText,
+                "imageURLs": post.imageURLs,
+                "createdAt": FieldValue.serverTimestamp()
+            ])
+        } catch {
+            print("Error reporting post: \(error.localizedDescription)")
+        }
+    }
+
     func toggleLike(post: Post, alreadyLiked: Bool) async {
         guard let postId = post.id, !uid.isEmpty else { return }
         let countDelta = alreadyLiked ? (post.likeCount > 0 ? Int64(-1) : Int64(0)) : Int64(1)

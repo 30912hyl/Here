@@ -1,105 +1,117 @@
 import SwiftUI
 
-// MARK: - 清爽金色渐变背景的星空
-// 用 TimelineView + Canvas 单层绘制所有星星,避免几十个 view 各自跑动画导致的卡顿。
+// MARK: - 星空
+// 设计目标:环境动效只在余光里存在——稀疏、缓慢、不可预测,不和正文抢注意力。
+//
+// 做法:没有"一批固定位置、一直在闪的星星"。只有少数几个"星位"(slot),每个星位按
+// 自己的节奏循环:大部分时间是空的,偶尔有一颗星慢慢亮起、停一会儿、慢慢熄灭;
+// 下一轮它出现在全新的随机位置。各星位的周期长度互不相同,所以整体永不重复。
+//
+// 全部状态都是时间的纯函数(不存任何 @State),用 TimelineView + Canvas 单层绘制。
 struct StarryBackgroundView: View {
-    @State private var stars: [Star] = []
-
-    // 改这里切换配色：.rose / .champagne / .lemon / .cool
-    let style: GoldStyle = .champagne
+    /// 星位数量。每个星位约 42% 的时间可见,所以同一时刻平均有 5 颗左右。
+    private static let slotCount = 12
 
     var body: some View {
-        GeometryReader { geometry in
-            TimelineView(.animation) { timeline in
-                Canvas { context, size in
-                    let time = timeline.date.timeIntervalSinceReferenceDate
-                    drawStars(context: context, time: time)
-                    drawShootingStar(context: context, size: size, time: time)
-                }
-            }
-            .onAppear {
-                generateStars(in: geometry.size)
-            }
-            .onChange(of: geometry.size) { _, newSize in
-                generateStars(in: newSize)
+        // 30fps 足够:亮灭过程以秒计,没必要按屏幕刷新率重绘
+        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+            Canvas { context, size in
+                let time = timeline.date.timeIntervalSinceReferenceDate
+                drawStars(context: context, size: size, time: time)
+                drawShootingStar(context: context, size: size, time: time)
             }
         }
         .allowsHitTesting(false)
     }
 
-    // MARK: 星星绘制
+    // MARK: 星星
 
-    private func drawStars(context: GraphicsContext, time: TimeInterval) {
-        for star in stars {
-            // 0...1 的闪烁相位
-            let phase = (sin(2 * .pi * time / star.duration + star.phaseOffset) + 1) / 2
-            let brightness = 0.25 + 0.75 * phase
-            let scale = 0.65 + 0.35 * phase
-            let drawSize = star.size * scale
+    private func drawStars(context: GraphicsContext, size: CGSize, time: TimeInterval) {
+        guard size.width > 0, size.height > 0 else { return }
 
-            // 光晕:柔和的径向渐变,代替昂贵的 shadow
-            let glowRadius = drawSize * (star.kind == .dot ? 2.6 : 1.6)
-            let glowRect = CGRect(
-                x: star.x - glowRadius, y: star.y - glowRadius,
-                width: glowRadius * 2, height: glowRadius * 2
-            )
+        for slot in 0..<Self.slotCount {
+            // 每个星位有自己的周期(12~24 秒)和相位,互不成整数比 → 整体不会出现可察觉的节拍
+            let cycleLength = 12.0 + 12.0 * Self.random(slot, 0, 1)
+            let shifted = time + cycleLength * Self.random(slot, 0, 2)
+            let cycle = Int(floor(shifted / cycleLength))
+            let progress = shifted / cycleLength - Double(cycle)   // 0..<1
+
+            // 一轮里只有前 30%~55% 的时间有星,其余时间这个星位是空的
+            let visibleFraction = 0.30 + 0.25 * Self.random(slot, cycle, 3)
+            guard progress < visibleFraction else { continue }
+
+            // 包络:慢慢亮起(40%)→ 停留(20%)→ 慢慢熄灭(40%),整个过程 4~13 秒。
+            // 亮起和熄灭用 smoothstep,起止都没有突变
+            let phase = progress / visibleFraction
+            let ramp = phase < 0.4 ? phase / 0.4 : (phase > 0.6 ? (1 - phase) / 0.4 : 1)
+            let envelope = ramp * ramp * (3 - 2 * ramp)
+            let brightness = envelope * (0.65 + 0.35 * Self.random(slot, cycle, 4))
+
+            // 位置每一轮都重新抽;只落在顶部 36%——再往下天已经接近白色,白星星在那里看不见
+            let x = size.width * Self.random(slot, cycle, 5)
+            let y = size.height * 0.36 * pow(Self.random(slot, cycle, 6), 1.6)
+
+            let kindRoll = Self.random(slot, cycle, 7)
+            let isDot = kindRoll > 0.72
+            let baseSize: CGFloat = isDot
+                ? 1.4 + 1.4 * Self.random(slot, cycle, 8)
+                : 6 + 8 * Self.random(slot, cycle, 8)
+            let drawSize = baseSize * (0.7 + 0.3 * envelope)
+
+            // 白光晕:光必须比周围亮才是光,所以星星是白的,而它背后的天(FeedSkyBackground
+            // 的渐变顶部)是香槟金。别把光晕或星体换成金色——浅底上比周围暗的"光"只会读成斑点。
+            let glowRadius = drawSize * (isDot ? 3.4 : 1.7)
+            let glowRect = CGRect(x: x - glowRadius, y: y - glowRadius,
+                                  width: glowRadius * 2, height: glowRadius * 2)
             context.fill(
                 Circle().path(in: glowRect),
                 with: .radialGradient(
-                    Gradient(colors: [star.color.opacity(0.38 * brightness), .clear]),
-                    center: CGPoint(x: star.x, y: star.y),
-                    startRadius: 0,
-                    endRadius: glowRadius
-                )
+                    Gradient(colors: [Color.white.opacity(0.75 * brightness), .clear]),
+                    center: CGPoint(x: x, y: y), startRadius: 0, endRadius: glowRadius)
             )
 
-            // 星星本体
             var body = context
-            body.translateBy(x: star.x, y: star.y)
+            body.translateBy(x: x, y: y)
+            body.opacity = brightness
             let rect = CGRect(x: -drawSize / 2, y: -drawSize / 2, width: drawSize, height: drawSize)
 
-            switch star.kind {
-            case .dot:
-                body.opacity = brightness
-                body.fill(Circle().path(in: rect), with: .color(star.color))
-            case .sparkle:
-                body.rotate(by: .degrees((phase - 0.5) * 32))
-                body.opacity = brightness
-                body.fill(SparkleShape().path(in: rect), with: .color(star.color))
-            case .cross:
-                body.rotate(by: .degrees(45))
-                body.opacity = brightness
-                let crossRect = rect.insetBy(dx: drawSize * 0.18, dy: drawSize * 0.18)
-                body.fill(SparkleShape().path(in: crossRect), with: .color(star.color))
+            if isDot {
+                body.fill(Circle().path(in: rect), with: .color(.white))
+            } else {
+                // 四角星在亮灭过程中缓缓转一点;一部分斜着放(✧),形态不单调
+                let tilt = kindRoll > 0.5 ? 45.0 : 0.0
+                body.rotate(by: .degrees(tilt + (envelope - 0.5) * 24))
+                body.fill(SparkleShape().path(in: rect), with: .color(.white))
             }
         }
     }
 
     // MARK: 流星
-    // 以 12 秒为一个周期,用周期序号生成伪随机参数;约 1/3 的周期没有流星,节奏不呆板。
+    // 每 24 秒一个窗口,只有约 45% 的窗口有流星;出现时刻、起点、方向、角度、长度全部随机。
 
     private func drawShootingStar(context: GraphicsContext, size: CGSize, time: TimeInterval) {
         guard size.width > 0, size.height > 0 else { return }
 
-        let cycle: TimeInterval = 12
-        let cycleIndex = Int(time / cycle)
-        let localTime = time.truncatingRemainder(dividingBy: cycle)
+        let window: TimeInterval = 24
+        let index = Int(floor(time / window))
+        let slot = 1000   // 和星位的随机序列错开
 
-        func seeded(_ salt: Int) -> Double {
-            let n = (cycleIndex &* 9301 &+ salt &* 49297) % 233280
-            return Double(abs(n)) / 233280.0
-        }
+        guard Self.random(slot, index, 1) < 0.45 else { return }
 
-        guard seeded(1) > 0.33 else { return }  // 这个周期没有流星
+        let flight = 0.9 + 0.5 * Self.random(slot, index, 2)
+        let startTime = (window - flight) * Self.random(slot, index, 3)
+        let local = time - Double(index) * window - startTime
+        guard local >= 0, local < flight else { return }
+        let progress = local / flight
 
-        let flightDuration: TimeInterval = 1.1
-        guard localTime < flightDuration else { return }
-        let progress = localTime / flightDuration
-
-        let startX = size.width * (0.05 + 0.6 * seeded(2))
-        let startY = 24 + (size.height * 0.24) * seeded(3)
-        let angle = Angle.degrees(16 + 18 * seeded(4)).radians
-        let travel: CGFloat = 260
+        let goesLeft = Self.random(slot, index, 4) < 0.35
+        let startX = size.width * (goesLeft ? 0.45 + 0.5 * Self.random(slot, index, 5)
+                                            : 0.05 + 0.5 * Self.random(slot, index, 5))
+        let startY = size.height * (0.04 + 0.22 * Self.random(slot, index, 6))
+        let slope = Angle.degrees(14 + 24 * Self.random(slot, index, 7)).radians
+        let angle = goesLeft ? .pi - slope : slope
+        let travel = 170 + 150 * Self.random(slot, index, 8)
+        let tail = 50 + 40 * Self.random(slot, index, 9)
 
         let x = startX + cos(angle) * travel * progress
         let y = startY + sin(angle) * travel * progress
@@ -110,54 +122,32 @@ struct StarryBackgroundView: View {
         ctx.rotate(by: .radians(angle))
         ctx.opacity = opacity * 0.9
 
-        let tailRect = CGRect(x: -70, y: -0.8, width: 70, height: 1.6)
+        let tailRect = CGRect(x: -tail, y: -0.8, width: tail, height: 1.6)
         ctx.fill(
             Capsule().path(in: tailRect),
             with: .linearGradient(
                 Gradient(colors: [.clear, .white.opacity(0.85), .white]),
-                startPoint: CGPoint(x: -70, y: 0),
+                startPoint: CGPoint(x: -tail, y: 0),
                 endPoint: CGPoint(x: 0, y: 0)
             )
         )
     }
 
-    // MARK: 星星生成
+    // MARK: 随机数
 
-    private func generateStars(in size: CGSize) {
-        guard size.width > 0, size.height > 0 else { return }
-
-        let fieldHeight = size.height * 0.62
-        let attempts = 130
-        var generatedStars: [Star] = []
-
-        for i in 0..<attempts {
-            let randomY = CGFloat.random(in: 0...fieldHeight)
-            let normalizedY = randomY / fieldHeight
-            let densityFactor = pow(1.0 - normalizedY, 1.8)
-            guard Double.random(in: 0...1) < densityFactor else { continue }
-
-            let kind: Star.Kind
-            switch Double.random(in: 0...1) {
-            case ..<0.16: kind = .sparkle
-            case ..<0.28: kind = .cross
-            default:      kind = .dot
-            }
-
-            generatedStars.append(Star(
-                id: i,
-                kind: kind,
-                x: CGFloat.random(in: 0...size.width),
-                y: randomY,
-                size: kind == .dot
-                    ? CGFloat.random(in: 1.5...3.5)
-                    : CGFloat.random(in: 6...13),
-                color: .white,
-                duration: Double.random(in: 1.8...4.2),
-                phaseOffset: Double.random(in: 0...(2 * .pi))
-            ))
-        }
-
-        self.stars = generatedStars
+    /// 由 (星位, 轮次, 用途) 决定的 0..<1 伪随机数:同一轮内稳定,换一轮就完全不同。
+    /// 必须用真正的位混合(splitmix64)。之前用的线性同余在相邻轮次之间只差约 4%,
+    /// 结果就是"流星几乎总在同一个地方"。
+    private static func random(_ slot: Int, _ cycle: Int, _ salt: Int) -> Double {
+        var x = UInt64(truncatingIfNeeded: slot) &* 0x9E37_79B9_7F4A_7C15
+        x ^= UInt64(truncatingIfNeeded: cycle) &* 0xBF58_476D_1CE4_E5B9
+        x ^= UInt64(truncatingIfNeeded: salt) &* 0x94D0_49BB_1331_11EB
+        x ^= x >> 30
+        x &*= 0xBF58_476D_1CE4_E5B9
+        x ^= x >> 27
+        x &*= 0x94D0_49BB_1331_11EB
+        x ^= x >> 31
+        return Double(x >> 11) / Double(1 << 53)
     }
 }
 
@@ -181,44 +171,4 @@ struct SparkleShape: Shape {
         path.closeSubpath()
         return path
     }
-}
-
-// MARK: - 配色方案
-enum GoldStyle {
-    case rose, champagne, lemon, cool
-
-    var colors: [Color] {
-        switch self {
-        case .rose:      // 1️⃣ 玫瑰金
-            return [Color(hex: "#E8C4B8").opacity(0.65), Color(hex: "#F5D9CE").opacity(0.5),
-                    Color(hex: "#FFF0E8").opacity(0.3),  Color(hex: "#FFFAF7").opacity(0.15), .clear]
-        case .champagne: // 2️⃣ 香槟金
-            return [Color(hex: "#F7E7CE").opacity(0.65), Color(hex: "#FFF3E0").opacity(0.5),
-                    Color(hex: "#FFFBF0").opacity(0.3),  Color(hex: "#FFFFFA").opacity(0.15), .clear]
-        case .lemon:     // 3️⃣ 柠檬金
-            return [Color(hex: "#F4E4C1").opacity(0.65), Color(hex: "#FFF8E1").opacity(0.5),
-                    Color(hex: "#FFFEF5").opacity(0.3),  Color(hex: "#FFFFF9").opacity(0.15), .clear]
-        case .cool:      // 4️⃣ 冷金色
-            return [Color(hex: "#E8E3D3").opacity(0.65), Color(hex: "#F5F1E1").opacity(0.5),
-                    Color(hex: "#FAF8F0").opacity(0.3),  Color(hex: "#FEFEFC").opacity(0.15), .clear]
-        }
-    }
-}
-
-// MARK: - 星星数据模型
-struct Star: Identifiable {
-    enum Kind {
-        case dot      // 圆点
-        case sparkle  // 四角星 ✦
-        case cross    // 斜十字小星
-    }
-
-    let id: Int
-    let kind: Kind
-    let x: CGFloat
-    let y: CGFloat
-    let size: CGFloat
-    let color: Color
-    let duration: Double
-    let phaseOffset: Double
 }
