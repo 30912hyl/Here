@@ -287,23 +287,80 @@ private struct ProfileMenuDivider: View {
 // MARK: - Bottom Actions (Sign Out + Delete Account)
 
 private struct ProfileBottomActions: View {
+    @EnvironmentObject private var auth: AuthService
+    @State private var showPhoneSignIn = false
+    @State private var confirmSignOut = false
+    @State private var confirmDelete = false
+    @State private var deleteNeedsReverify = false
+    @State private var deleteFailed = false
+
     var body: some View {
         VStack(spacing: 16) {
-            Button {} label: {
-                Text("Sign Out")
-                    .font(.system(size: 14, weight: .light))
-                    .tracking(0.3)
-                    .foregroundColor(profileGoldAccent.opacity(0.8))
+            if auth.isPhoneVerified {
+                Button { confirmSignOut = true } label: {
+                    Text("Sign Out")
+                        .font(.system(size: 14, weight: .light))
+                        .tracking(0.3)
+                        .foregroundColor(profileGoldAccent.opacity(0.8))
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button { showPhoneSignIn = true } label: {
+                    Text("Sign in with phone")
+                        .font(.system(size: 14, weight: .light))
+                        .tracking(0.3)
+                        .foregroundColor(profileGoldAccent.opacity(0.8))
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
-            Button {} label: {
+            Button { confirmDelete = true } label: {
                 Text("Delete Account")
                     .font(.system(size: 12, weight: .light))
                     .tracking(0.2)
                     .foregroundColor(profileBrownText.opacity(0.25))
             }
             .buttonStyle(.plain)
+        }
+        .sheet(isPresented: $showPhoneSignIn) {
+            PhoneSignInSheet(
+                reason: deleteNeedsReverify
+                    ? "For your safety, confirm your number once more before deleting the account."
+                    : "Sign in to post, chat, and keep your history across devices.",
+                onVerified: {
+                    guard deleteNeedsReverify else { return }
+                    deleteNeedsReverify = false
+                    Task { await deleteAccount() }
+                }
+            )
+        }
+        .alert("Sign out?", isPresented: $confirmSignOut) {
+            Button("Sign Out", role: .destructive) { Task { await auth.signOut() } }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("You can keep reading. Sign in with the same phone number any time to get your posts and chats back.")
+        }
+        .alert("Delete your account?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) { Task { await deleteAccount() } }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This permanently removes your account. Your posts and chats will no longer be tied to you. This can't be undone.")
+        }
+        .alert("Couldn't delete the account", isPresented: $deleteFailed) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("Please try again in a moment.")
+        }
+    }
+
+    private func deleteAccount() async {
+        do {
+            try await auth.deleteAccount()
+        } catch AuthService.DeleteAccountError.needsRecentLogin {
+            deleteNeedsReverify = true
+            showPhoneSignIn = true
+        } catch {
+            deleteFailed = true
         }
     }
 }
