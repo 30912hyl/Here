@@ -6,6 +6,9 @@ struct ContentView: View {
     @State private var selectedTab: MainTab = .feed
     @State private var lastNonCreateTab: MainTab = .feed
     @State private var showCreateSheet = false
+    @State private var showPhoneSignIn = false
+    /// What to do once the phone is verified (e.g. open the composer)
+    @State private var afterPhoneVerified: (() -> Void)?
     @State private var heartBeating = false
     @State private var navigateToThreadId: String? = nil
     @State private var isChatOpen = false
@@ -32,11 +35,14 @@ struct ContentView: View {
             KeyboardWarmer.warm()
             routePendingNotificationTap()
         }
-        .onChange(of: authService.isSignedIn) {
-            print("isSignedIn changed to: \(authService.isSignedIn)")
-            if authService.isSignedIn {
+        .onChange(of: authService.uid) {
+            // Sign-out lands on a fresh anonymous uid, so listeners bound to the
+            // old uid (threads, user doc) must be torn down and rebuilt
+            app.stopListening()
+            if authService.isSignedIn, let uid = authService.uid {
                 app.authService = authService
                 app.startListening()
+                PushManager.shared.userSignedIn(uid: uid)
             }
         }
         .onDisappear {
@@ -51,6 +57,17 @@ struct ContentView: View {
             if scenePhase != .active {
                 app.voice.appDidLeaveForeground()
             }
+        }
+    }
+
+    /// Runs `action` if the phone is verified; otherwise asks for verification
+    /// first and runs it afterwards. Reading never goes through here.
+    private func requirePhone(then action: @escaping () -> Void) {
+        if authService.isPhoneVerified {
+            action()
+        } else {
+            afterPhoneVerified = action
+            showPhoneSignIn = true
         }
     }
 
@@ -75,7 +92,7 @@ struct ContentView: View {
             Group {
                 switch selectedTab {
                 case .voice:
-                    VoiceView(voice: app.voice)
+                    VoiceView(voice: app.voice, requirePhone: requirePhone)
                 case .feed, .create:
                     FeedView(
                         // Private ("just for me") posts exist in Firestore — never show them to others
@@ -86,11 +103,13 @@ struct ContentView: View {
                         },
                         uid: app.uid,
                         onStartChat: { post in
-                            // Opens a local draft — nothing exists in Firestore
-                            // (or on the other phone) until a message is sent
-                            if let threadId = app.startChat(from: post) {
-                                navigateToThreadId = threadId
-                                selectedTab = .inbox
+                            requirePhone {
+                                // Opens a local draft — nothing exists in Firestore
+                                // (or on the other phone) until a message is sent
+                                if let threadId = app.startChat(from: post) {
+                                    navigateToThreadId = threadId
+                                    selectedTab = .inbox
+                                }
                             }
                         },
                         onToggleLike: { post, alreadyLiked in
@@ -130,7 +149,7 @@ struct ContentView: View {
 
                 Button {
                     startHeartbeat()
-                    showCreateSheet = true
+                    requirePhone { showCreateSheet = true }
                 } label: {
                     // 隐形占位复制邻居的图标+标签结构,圆钮以 overlay 叠上去:
                     // 居中于整项高度,且不撑高胶囊
@@ -190,6 +209,13 @@ struct ContentView: View {
             .ignoresSafeArea(edges: .bottom)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        }
+        .sheet(isPresented: $showPhoneSignIn) {
+            PhoneSignInSheet(onVerified: {
+                afterPhoneVerified?()
+                afterPhoneVerified = nil
+            })
+            .environmentObject(authService)
         }
         .fullScreenCover(isPresented: $showCreateSheet) {
             CreatePostView(onSubmit: { title, bodyText, images, tags, isPrivate in
