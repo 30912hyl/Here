@@ -79,8 +79,11 @@ struct ContentView: View {
                 case .feed, .create:
                     FeedView(
                         // Private ("just for me") posts exist in Firestore — never show them to others
+                        // Posts live 48h. Nothing deletes them server-side, so expiry is
+                        // enforced here (and the author still sees them under My Posts → Archived)
                         posts: app.posts.filter {
-                            (!$0.isPrivate || $0.authorUID == app.uid)
+                            $0.expiresAt > Date()
+                                && (!$0.isPrivate || $0.authorUID == app.uid)
                                 && !app.reportedPostIds.contains($0.id ?? "")
                                 && !app.blockedUIDs.contains($0.authorUID)
                         },
