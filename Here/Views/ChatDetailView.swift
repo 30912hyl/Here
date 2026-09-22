@@ -125,9 +125,9 @@ struct ChatDetailView: View {
                         Label("End Conversation", systemImage: "xmark.circle")
                     }
 
-                    // Report and end
+                    // Report and end — the conversation is only ended once the
+                    // report is submitted, so cancelling the sheet changes nothing
                     Button(role: .destructive) {
-                        Task { await app.manualFreezeThread(threadId: threadId) }
                         showEndedActions = true
                     } label: {
                         Label("Report & End", systemImage: "flag")
@@ -140,11 +140,13 @@ struct ChatDetailView: View {
                 }
             }
         }
-        .alert("Report this conversation?", isPresented: $showEndedActions) {
-            Button("Report", role: .destructive) { }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Thank you for helping keep this space safe.")
+        .sheet(isPresented: $showEndedActions) {
+            ReportSheet(
+                title: "Why are you reporting this conversation?",
+                message: "Your report is anonymous. The conversation will end and the other person won't be told why."
+            ) { reason, details in
+                Task { await app.reportChat(thread: thread, reason: reason, details: details) }
+            }
         }
     }
 
@@ -238,7 +240,6 @@ struct ChatDetailView: View {
                                 Task {
                                     await app.setContinueChoice(threadId: threadId, choice: .no)
                                 }
-                                showEndedActions = true
                             }
                             .font(.system(size: 14, weight: .light))
                             .foregroundStyle(Color(hex: "#C4A55A"))
