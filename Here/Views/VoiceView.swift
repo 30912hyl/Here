@@ -27,6 +27,8 @@ private let voiceCardBorder = Color(hex: "#E8E0CC")
 
 struct VoiceView: View {
     @ObservedObject var voice: VoicePresenceService
+    /// Runs the action only for phone-verified users (asks to verify otherwise)
+    var requirePhone: (@escaping () -> Void) -> Void = { $0() }
 
     var body: some View {
         NavigationStack {
@@ -75,7 +77,10 @@ struct VoiceView: View {
 
                 Toggle("", isOn: Binding(
                     get: { voice.isAvailable },
-                    set: { voice.setAvailable($0) }
+                    set: { on in
+                        if on { requirePhone { voice.setAvailable(true) } }
+                        else { voice.setAvailable(false) }
+                    }
                 ))
                 .labelsHidden()
                 .tint(voiceGoldAccent)
