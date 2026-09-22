@@ -241,6 +241,34 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Ends the conversation and files a report with a transcript of the other
+    /// person's recent messages, so moderators can act after the thread expires.
+    func reportChat(thread: ChatThread, reason: String, details: String) async {
+        guard let threadId = thread.id, !uid.isEmpty else { return }
+        await manualFreezeThread(threadId: threadId)
+        let other = thread.participants.first { $0 != uid } ?? ""
+        let transcript = (messages[threadId] ?? [])
+            .filter { $0.senderUID == other }
+            .suffix(30)
+            .map { ["text": $0.text, "at": Timestamp(date: $0.createdAt)] as [String: Any] }
+        do {
+            try await db.collection("reports").addDocument(data: [
+                "type": "chat",
+                "threadId": threadId,
+                "postId": thread.postId ?? "",
+                "postTitle": thread.postTitle,
+                "reportedUID": other,
+                "reporterUID": uid,
+                "reason": reason,
+                "details": details,
+                "messages": transcript,
+                "createdAt": FieldValue.serverTimestamp()
+            ])
+        } catch {
+            print("Error reporting chat: \(error.localizedDescription)")
+        }
+    }
+
     func toggleLike(post: Post, alreadyLiked: Bool) async {
         guard let postId = post.id, !uid.isEmpty else { return }
         let countDelta = alreadyLiked ? (post.likeCount > 0 ? Int64(-1) : Int64(0)) : Int64(1)
