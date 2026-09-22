@@ -6,7 +6,9 @@ struct ChatDetailView: View {
 
     @State private var input = ""
     @State private var showEndedActions = false
+    @State private var showBlockConfirm = false
     @FocusState private var inputFocused: Bool
+    @Environment(\.dismiss) private var dismiss
 
     /// Scroll target that sits after the message list's bottom padding, so
     /// programmatic scrolls land exactly where a manual swipe-to-bottom rests.
@@ -133,12 +135,27 @@ struct ChatDetailView: View {
                         Label("Report & End", systemImage: "flag")
                     }
 
+                    Button(role: .destructive) {
+                        showBlockConfirm = true
+                    } label: {
+                        Label("Block & End", systemImage: "hand.raised")
+                    }
+
                 } label: {
                     Text("Help")
                         .font(.system(size: 14, weight: .light))
                         .foregroundStyle(goldGradient)
                 }
             }
+        }
+        .alert("Block this person?", isPresented: $showBlockConfirm) {
+            Button("Block", role: .destructive) {
+                Task { await app.blockUser(in: thread) }
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This conversation will end, and you won't see their posts or messages anymore. They won't be notified.")
         }
         .sheet(isPresented: $showEndedActions) {
             ReportSheet(

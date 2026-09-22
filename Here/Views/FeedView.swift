@@ -6,6 +6,7 @@ struct FeedView: View {
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
     let onReportPost: (_ post: Post, _ reason: String, _ details: String) -> Void
+    let onBlockUser: (Post) -> Void
 
     @State private var selectedTag: String? = nil
     @State private var showAllTags = false
@@ -70,7 +71,8 @@ struct FeedView: View {
                                 uid: uid,
                                 onStartChat: onStartChat,
                                 onToggleLike: onToggleLike,
-                                onReportPost: onReportPost
+                                onReportPost: onReportPost,
+                                onBlockUser: onBlockUser
                             )
                             .containerRelativeFrame(.vertical)
                         }
@@ -295,9 +297,11 @@ struct SinglePostView: View {
     let onStartChat: (Post) -> Void
     let onToggleLike: (Post, Bool) -> Void
     let onReportPost: (_ post: Post, _ reason: String, _ details: String) -> Void
+    let onBlockUser: (Post) -> Void
 
     @State private var likeScale = 1.0
     @State private var showReport = false
+    @State private var showBlockConfirm = false
     @State private var selectedImageURL: String? = nil
     @State private var optimisticLiked: Bool? = nil
     @State private var showBurstHeart = false
@@ -413,6 +417,13 @@ struct SinglePostView: View {
                             } label: {
                                 Label("Report Post", systemImage: "flag")
                             }
+                            if post.authorUID != uid {
+                                Button(role: .destructive) {
+                                    showBlockConfirm = true
+                                } label: {
+                                    Label("Block User", systemImage: "hand.raised")
+                                }
+                            }
                         } label: {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 18, weight: .light))
@@ -456,6 +467,12 @@ struct SinglePostView: View {
         .onChange(of: post.likedBy) {
             // Server state caught up — drop the optimistic override
             optimisticLiked = nil
+        }
+        .alert("Block this person?", isPresented: $showBlockConfirm) {
+            Button("Block", role: .destructive) { onBlockUser(post) }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("You won't see their posts or messages anymore. They won't be notified.")
         }
         .sheet(isPresented: $showReport) {
             ReportSheet(
@@ -706,6 +723,7 @@ struct FullScreenImageItem: Identifiable {
         uid: "preview",
         onStartChat: { _ in },
         onToggleLike: { _, _ in },
-        onReportPost: { _, _, _ in }
+        onReportPost: { _, _, _ in },
+        onBlockUser: { _ in }
     )
 }

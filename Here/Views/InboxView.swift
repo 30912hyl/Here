@@ -12,11 +12,11 @@ struct InboxView: View {
 
     // Most recently active conversations first, like iMessage
     var activeThreads: [ChatThread] {
-        app.threads.filter { !$0.isFrozen() }
+        app.visibleThreads.filter { !$0.isFrozen() }
             .sorted { app.lastActivity(of: $0) > app.lastActivity(of: $1) }
     }
     var endedThreads: [ChatThread] {
-        app.threads.filter { $0.isFrozen() }
+        app.visibleThreads.filter { $0.isFrozen() }
             .sorted { app.lastActivity(of: $0) > app.lastActivity(of: $1) }
     }
 
@@ -32,7 +32,7 @@ struct InboxView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             List {
-                if app.threads.isEmpty {
+                if app.visibleThreads.isEmpty {
                     Text("No conversations yet.")
                         .foregroundStyle(Color(hex: "#E4DCC6"))
                         .font(.system(size: 14, weight: .light))
