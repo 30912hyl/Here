@@ -9,6 +9,7 @@ final class AppState: ObservableObject {
     private let db = Firestore.firestore()
     private var postsListener: ListenerRegistration?
     private var threadsListener: ListenerRegistration?
+    private var userListener: ListenerRegistration?
     private var messageListeners: [String: ListenerRegistration] = [:]
 
     var authService: AuthService
@@ -35,6 +36,7 @@ final class AppState: ObservableObject {
     // MARK: - Listeners
 
     func startListening() {
+        listenToUser()
         listenToPosts()
         listenToThreads()
         voice.start(uid: uid)
@@ -42,6 +44,7 @@ final class AppState: ObservableObject {
 
     func stopListening() {
         voice.stop()
+        userListener?.remove()
         postsListener?.remove()
         threadsListener?.remove()
         messageListeners.values.forEach { $0.remove() }
@@ -120,7 +123,7 @@ final class AppState: ObservableObject {
     /// Ended chats are excluded: the list shows them as "ended" with no unread
     /// dot, so counting them leaves a badge the user can never clear.
     var unreadThreadCount: Int {
-        threads.filter { !$0.isFrozen() && unreadCount(in: $0) > 0 }.count
+        visibleThreads.filter { !$0.isFrozen() && unreadCount(in: $0) > 0 }.count
     }
 
     /// Stamps "read up to now" for the current user on a thread.
@@ -204,6 +207,59 @@ final class AppState: ObservableObject {
         }
     }
   
+    // MARK: - Blocking
+
+    /// People this user has blocked. Their posts and conversations are hidden
+    /// on this device. Stored on the user's own document (owner-only rules).
+    @Published private(set) var blockedUIDs: Set<String> = []
+
+    /// Conversations minus those with someone I've blocked.
+    var visibleThreads: [ChatThread] {
+        threads.filter { thread in
+            !thread.participants.contains { $0 != uid && blockedUIDs.contains($0) }
+        }
+    }
+
+    private func listenToUser() {
+        guard !uid.isEmpty else { return }
+        userListener = db.collection("users").document(uid)
+            .addSnapshotListener { [weak self] snapshot, _ in
+                guard let self else { return }
+                let blocked = snapshot?.data()?["blocked"] as? [String] ?? []
+                self.blockedUIDs = Set(blocked)
+                self.syncBadge()
+            }
+    }
+
+    func blockUser(_ other: String) async {
+        guard !uid.isEmpty, !other.isEmpty, other != uid else { return }
+        blockedUIDs.insert(other)   // hide immediately; the listener confirms
+        do {
+            try await db.collection("users").document(uid).setData(
+                ["blocked": FieldValue.arrayUnion([other])], merge: true)
+        } catch {
+            print("Error blocking user: \(error.localizedDescription)")
+        }
+    }
+
+    func unblockUser(_ other: String) async {
+        guard !uid.isEmpty else { return }
+        blockedUIDs.remove(other)
+        do {
+            try await db.collection("users").document(uid).setData(
+                ["blocked": FieldValue.arrayRemove([other])], merge: true)
+        } catch {
+            print("Error unblocking user: \(error.localizedDescription)")
+        }
+    }
+
+    /// Blocks the other participant and ends the conversation.
+    func blockUser(in thread: ChatThread) async {
+        guard let other = thread.participants.first(where: { $0 != uid }) else { return }
+        if let threadId = thread.id { await manualFreezeThread(threadId: threadId) }
+        await blockUser(other)
+    }
+
     // MARK: - Reports
 
     private static let reportedPostIdsKey = "reportedPostIds"

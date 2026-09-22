@@ -82,6 +82,7 @@ struct ContentView: View {
                         posts: app.posts.filter {
                             (!$0.isPrivate || $0.authorUID == app.uid)
                                 && !app.reportedPostIds.contains($0.id ?? "")
+                                && !app.blockedUIDs.contains($0.authorUID)
                         },
                         uid: app.uid,
                         onStartChat: { post in
@@ -97,6 +98,9 @@ struct ContentView: View {
                         },
                         onReportPost: { post, reason, details in
                             Task { await app.reportPost(post, reason: reason, details: details) }
+                        },
+                        onBlockUser: { post in
+                            Task { await app.blockUser(post.authorUID) }
                         }
                     )
                 case .inbox:
