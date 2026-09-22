@@ -20,6 +20,8 @@ private let warmBackground = Color(hex: "#FAF8F4")
 // MARK: - ProfileView
 
 struct ProfileView: View {
+    @ObservedObject var app: AppState
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -28,7 +30,7 @@ struct ProfileView: View {
                     VStack(spacing: 24) {
                         GreetingSection()
                         AccountCard()
-                        ProfileMenuCard()
+                        ProfileMenuCard(app: app)
                         ProfileBottomActions()
                     }
                     .padding(.top, 36)
@@ -54,9 +56,23 @@ private struct GreetingSection: View {
 // MARK: - Account Card (phone + ID)
 
 private struct AccountCard: View {
-    @State private var isEditingID = false
-    @State private var userID: String = "quiet-moon-4821"
-    @State private var editingText = ""
+    @EnvironmentObject private var auth: AuthService
+    @State private var showPhoneSignIn = false
+
+    /// "+1 ••• ••• 8291" — enough to recognise your own number, nothing more
+    private var maskedPhone: String? {
+        guard let number = auth.phoneNumber else { return nil }
+        let digits = number.filter(\.isNumber)
+        guard digits.count >= 4 else { return number }
+        let last4 = digits.suffix(4)
+        let country = digits.count > 10 ? "+" + digits.prefix(digits.count - 10) + " " : ""
+        return country + "••• ••• " + last4
+    }
+
+    private var memberSinceText: String {
+        guard let date = auth.memberSince else { return "—" }
+        return date.formatted(.dateTime.month(.abbreviated).year())
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -72,16 +88,24 @@ private struct AccountCard: View {
                         .font(.system(size: 10, weight: .medium))
                         .tracking(1.5)
                         .foregroundColor(profileMutedGold)
-                    Text("+1 ••• ••• 8291")
-                        .font(.system(size: 15, weight: .regular, design: .monospaced))
-                        .foregroundColor(profileBrownText)
+                    if let maskedPhone {
+                        Text(maskedPhone)
+                            .font(.system(size: 15, weight: .regular, design: .monospaced))
+                            .foregroundColor(profileBrownText)
+                    } else {
+                        Text("Not linked yet")
+                            .font(.system(size: 15, weight: .light))
+                            .foregroundColor(profileBrownText.opacity(0.6))
+                    }
                 }
 
                 Spacer()
 
-                Button("Change") {}
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(profileGoldAccent)
+                if !auth.isPhoneVerified {
+                    Button("Link") { showPhoneSignIn = true }
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(profileGoldAccent)
+                }
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 20)
@@ -91,62 +115,24 @@ private struct AccountCard: View {
                 .frame(height: 0.5)
                 .padding(.leading, 60)
 
-            // ID row
+            // Member since row
             HStack(spacing: 14) {
-                Image(systemName: "person.text.rectangle")
+                Image(systemName: "sparkles")
                     .font(.system(size: 16, weight: .light))
                     .foregroundStyle(profileGoldGradient)
                     .frame(width: 24)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("YOUR UNIQUE ID")
+                    Text("HERE SINCE")
                         .font(.system(size: 10, weight: .medium))
                         .tracking(1.5)
                         .foregroundColor(profileMutedGold)
-
-                    if isEditingID {
-                        TextField("", text: $editingText)
-                            .font(.system(size: 15, weight: .regular, design: .monospaced))
-                            .foregroundColor(profileBrownText)
-                            .tint(profileGoldAccent)
-                            .autocorrectionDisabled()
-                            .textInputAutocapitalization(.never)
-                            .submitLabel(.done)
-                            .onSubmit {
-                                if !editingText.trimmingCharacters(in: .whitespaces).isEmpty {
-                                    userID = editingText.trimmingCharacters(in: .whitespaces)
-                                }
-                                isEditingID = false
-                            }
-                    } else {
-                        Text(userID)
-                            .font(.system(size: 15, weight: .regular, design: .monospaced))
-                            .foregroundColor(profileBrownText)
-                    }
+                    Text(memberSinceText)
+                        .font(.system(size: 15, weight: .regular, design: .monospaced))
+                        .foregroundColor(profileBrownText)
                 }
 
                 Spacer()
-
-                if isEditingID {
-                    Button("Save") {
-                        if !editingText.trimmingCharacters(in: .whitespaces).isEmpty {
-                            userID = editingText.trimmingCharacters(in: .whitespaces)
-                        }
-                        isEditingID = false
-                    }
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(profileGoldAccent)
-                } else {
-                    Button {
-                        editingText = userID
-                        isEditingID = true
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundColor(profileMutedGold)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 20)
@@ -157,18 +143,22 @@ private struct AccountCard: View {
                 .shadow(color: profileGoldAccent.opacity(0.1), radius: 12, y: 4)
         )
         .padding(.horizontal, 24)
+        .sheet(isPresented: $showPhoneSignIn) {
+            PhoneSignInSheet(reason: "Link a phone number to post, chat, and keep your history across devices. It's never shown to anyone.")
+        }
     }
 }
 
 // MARK: - Profile Menu Card
 
 private struct ProfileMenuCard: View {
+    @ObservedObject var app: AppState
     @State private var notificationsOn = true
     @State private var postsHidden = false
 
     var body: some View {
         VStack(spacing: 0) {
-            NavigationLink(destination: MyPostsView()) {
+            NavigationLink(destination: MyPostsView(app: app)) {
                 ProfileMenuRow(icon: "book.closed", label: "My Posts") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 13, weight: .light))
@@ -209,11 +199,14 @@ private struct ProfileMenuCard: View {
 
             ProfileMenuDivider()
 
-            ProfileMenuRow(icon: "shield.lefthalf.filled", label: "Safety & Reporting") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .light))
-                    .foregroundColor(profileMutedGold)
+            NavigationLink(destination: BlockedUsersView(app: app)) {
+                ProfileMenuRow(icon: "shield.lefthalf.filled", label: "Safety & Reporting") {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .light))
+                        .foregroundColor(profileMutedGold)
+                }
             }
+            .buttonStyle(.plain)
 
             ProfileMenuDivider()
 
@@ -368,19 +361,13 @@ private struct ProfileBottomActions: View {
 // MARK: - My Posts View
 
 struct MyPostsView: View {
+    @ObservedObject var app: AppState
     @State private var showArchived = false
 
-    private let activePosts: [MockProfilePost] = [
-        MockProfilePost(title: "Feeling grateful today", tags: ["grateful", "happy"], time: "2h ago"),
-        MockProfilePost(title: "Can't sleep again", tags: ["sad", "anxious"], time: "Yesterday"),
-    ]
-
-    private let archivedPosts: [MockProfilePost] = [
-        MockProfilePost(title: "Something beautiful happened", tags: ["hopeful"], time: "Mar 12"),
-        MockProfilePost(title: "First time sharing here", tags: ["nervous"], time: "Feb 28"),
-    ]
-
-    fileprivate var currentPosts: [MockProfilePost] { showArchived ? archivedPosts : activePosts }
+    /// Active = still visible in the feed; Archived = past its 48h
+    private var activePosts: [Post] { app.myPosts.filter { $0.expiresAt > Date() } }
+    private var archivedPosts: [Post] { app.myPosts.filter { $0.expiresAt <= Date() } }
+    private var currentPosts: [Post] { showArchived ? archivedPosts : activePosts }
 
     var body: some View {
         ZStack {
@@ -449,29 +436,45 @@ private struct MyPostsTab: View {
 }
 
 private struct MyPostCard: View {
-    let post: MockProfilePost
+    let post: Post
     let isArchived: Bool
+
+    private var timeText: String {
+        if isArchived {
+            return post.createdAt.formatted(.dateTime.month(.abbreviated).day())
+        }
+        return post.createdAt.formatted(.relative(presentation: .named))
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(post.title)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(isArchived ? profileBrownText.opacity(0.4) : profileBrownText)
-                    .lineLimit(2)
-
                 HStack(spacing: 6) {
-                    ForEach(post.tags, id: \.self) { tag in
-                        Text("#\(tag)")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundColor(isArchived ? profileMutedGold.opacity(0.6) : profileGoldAccent)
+                    if post.isPrivate {
+                        Image(systemName: "lock")
+                            .font(.system(size: 11, weight: .light))
+                            .foregroundColor(profileMutedGold)
+                    }
+                    Text(post.title.isEmpty ? post.bodyText : post.title)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(isArchived ? profileBrownText.opacity(0.4) : profileBrownText)
+                        .lineLimit(2)
+                }
+
+                if !post.tags.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(post.tags, id: \.self) { tag in
+                            Text("#\(tag)")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundColor(isArchived ? profileMutedGold.opacity(0.6) : profileGoldAccent)
+                        }
                     }
                 }
             }
 
             Spacer()
 
-            Text(post.time)
+            Text(timeText)
                 .font(.system(size: 12, weight: .light))
                 .foregroundColor(profileMutedGold.opacity(0.7))
         }
@@ -485,23 +488,77 @@ private struct MyPostCard: View {
     }
 }
 
-// MARK: - Mock Data
+// MARK: - Blocked users
 
-private struct MockProfilePost: Identifiable {
-    let id = UUID()
-    let title: String
-    let tags: [String]
-    let time: String
+struct BlockedUsersView: View {
+    @ObservedObject var app: AppState
+
+    private var blocked: [String] { app.blockedUIDs.sorted() }
+
+    var body: some View {
+        ZStack {
+            warmBackground.ignoresSafeArea()
+            if blocked.isEmpty {
+                VStack(spacing: 10) {
+                    Text("No one blocked.")
+                        .font(.system(size: 15, weight: .light))
+                        .foregroundColor(profileMutedGold)
+                    Text("Block someone from a post's ⋯ menu or a conversation's Help menu.")
+                        .font(.system(size: 13, weight: .light))
+                        .foregroundColor(profileMutedGold.opacity(0.8))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 10) {
+                        ForEach(blocked, id: \.self) { other in
+                            let nickname = app.knownNickname(for: other)
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(nickname ?? "Someone from the feed")
+                                        .font(.system(size: 15, weight: .medium))
+                                        .foregroundColor(profileBrownText)
+                                    Text(nickname == nil ? "Blocked from a post" : "Blocked from a conversation")
+                                        .font(.system(size: 12, weight: .light))
+                                        .foregroundColor(profileMutedGold)
+                                }
+                                Spacer()
+                                Button("Unblock") {
+                                    Task { await app.unblockUser(other) }
+                                }
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundColor(profileGoldAccent)
+                            }
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color.white)
+                                    .shadow(color: profileGoldAccent.opacity(0.07), radius: 6, y: 2)
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
+                    .padding(.bottom, 40)
+                }
+            }
+        }
+        .navigationTitle("Blocked Users")
+        .navigationBarTitleDisplayMode(.inline)
+    }
 }
 
 // MARK: - Previews
 
 #Preview("Profile") {
-    ProfileView()
+    ProfileView(app: AppState(authService: AuthService()))
+        .environmentObject(AuthService())
 }
 
 #Preview("My Posts") {
     NavigationStack {
-        MyPostsView()
+        MyPostsView(app: AppState(authService: AuthService()))
     }
 }

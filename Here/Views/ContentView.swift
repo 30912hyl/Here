@@ -128,7 +128,7 @@ struct ContentView: View {
                 case .inbox:
                     InboxView(app: app, navigateToThreadId: $navigateToThreadId, isChatOpen: $isChatOpen)
                 case .profile:
-                    ProfileView()
+                    ProfileView(app: app)
                 }
             }
 

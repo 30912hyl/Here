@@ -21,6 +21,7 @@ final class AuthService: ObservableObject {
     @Published var phoneNumber: String?
 
     var isPhoneVerified: Bool { phoneNumber != nil }
+    var memberSince: Date? { Auth.auth().currentUser?.metadata.creationDate }
 
     private var stateHandle: AuthStateDidChangeListenerHandle?
 
