@@ -32,4 +32,15 @@ struct StorageService {
 
         return urls
     }
+
+    /// Deletes every photo under posts/{uid}/ (one folder per post).
+    static func deleteAllImages(forUser uid: String) async {
+        let root = storage.reference().child("posts/\(uid)")
+        guard let folders = try? await root.listAll() else { return }
+        for item in folders.items { try? await item.delete() }
+        for folder in folders.prefixes {
+            guard let files = try? await folder.listAll() else { continue }
+            for item in files.items { try? await item.delete() }
+        }
+    }
 }

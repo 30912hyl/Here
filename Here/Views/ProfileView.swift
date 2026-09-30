@@ -31,7 +31,7 @@ struct ProfileView: View {
                         GreetingSection()
                         AccountCard()
                         ProfileMenuCard(app: app)
-                        ProfileBottomActions()
+                        ProfileBottomActions(app: app)
                     }
                     .padding(.top, 36)
                     .padding(.bottom, 110)
@@ -153,76 +153,40 @@ private struct AccountCard: View {
 
 private struct ProfileMenuCard: View {
     @ObservedObject var app: AppState
-    @State private var notificationsOn = true
-    @State private var postsHidden = false
+
+    private var chevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 13, weight: .light))
+            .foregroundColor(profileMutedGold)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             NavigationLink(destination: MyPostsView(app: app)) {
-                ProfileMenuRow(icon: "book.closed", label: "My Posts") {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .light))
-                        .foregroundColor(profileMutedGold)
-                }
+                ProfileMenuRow(icon: "book.closed", label: "My Posts") { chevron }
             }
             .buttonStyle(.plain)
-
-            ProfileMenuDivider()
-
-            ProfileMenuRow(
-                icon: "moon",
-                label: "Hide My Posts",
-                subtitle: "your posts won't appear in the shared feed"
-            ) {
-                Toggle("", isOn: $postsHidden)
-                    .tint(profileGoldAccent)
-                    .labelsHidden()
-                    .scaleEffect(0.85)
-            }
-
-            ProfileMenuDivider()
-
-            ProfileMenuRow(icon: "bell.badge", label: "Notifications") {
-                Toggle("", isOn: $notificationsOn)
-                    .tint(profileGoldAccent)
-                    .labelsHidden()
-                    .scaleEffect(0.85)
-            }
-
-            ProfileMenuDivider()
-
-            ProfileMenuRow(icon: "heart.text.square", label: "Refer a Friend") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .light))
-                    .foregroundColor(profileMutedGold)
-            }
 
             ProfileMenuDivider()
 
             NavigationLink(destination: BlockedUsersView(app: app)) {
-                ProfileMenuRow(icon: "shield.lefthalf.filled", label: "Safety & Reporting") {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .light))
-                        .foregroundColor(profileMutedGold)
-                }
+                ProfileMenuRow(icon: "shield.lefthalf.filled", label: "Safety & Reporting") { chevron }
             }
             .buttonStyle(.plain)
 
             ProfileMenuDivider()
 
-            ProfileMenuRow(icon: "questionmark.circle", label: "Help & Feedback") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .light))
-                    .foregroundColor(profileMutedGold)
+            Link(destination: AppLinks.support) {
+                ProfileMenuRow(icon: "questionmark.circle", label: "Help & Feedback") { chevron }
             }
+            .buttonStyle(.plain)
 
             ProfileMenuDivider()
 
-            ProfileMenuRow(icon: "doc.text", label: "About & Legal") {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .light))
-                    .foregroundColor(profileMutedGold)
+            NavigationLink(destination: AboutLegalView()) {
+                ProfileMenuRow(icon: "doc.text", label: "About & Legal") { chevron }
             }
+            .buttonStyle(.plain)
         }
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -277,9 +241,78 @@ private struct ProfileMenuDivider: View {
     }
 }
 
+// MARK: - About & Legal
+
+/// Public pages hosted on Firebase Hosting (the `site/` folder in the repo).
+/// App Store Connect points at the same URLs.
+enum AppLinks {
+    static let site = URL(string: "https://here-a6817.web.app")!
+    static let privacy = site.appendingPathComponent("privacy.html")
+    static let terms = site.appendingPathComponent("terms.html")
+    static let support = site.appendingPathComponent("support.html")
+}
+
+struct AboutLegalView: View {
+    private var version: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "Version \(short) (\(build))"
+    }
+
+    var body: some View {
+        ZStack {
+            warmBackground.ignoresSafeArea()
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 24) {
+                    VStack(spacing: 0) {
+                        legalRow("Privacy Policy", icon: "hand.raised", url: AppLinks.privacy)
+                        ProfileMenuDivider()
+                        legalRow("Terms & Community Guidelines", icon: "doc.text", url: AppLinks.terms)
+                        ProfileMenuDivider()
+                        legalRow("Help & Support", icon: "questionmark.circle", url: AppLinks.support)
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.white)
+                            .shadow(color: profileGoldAccent.opacity(0.1), radius: 12, y: 4)
+                    )
+                    .padding(.horizontal, 24)
+
+                    VStack(spacing: 6) {
+                        Text("Here")
+                            .font(.system(size: 15, weight: .light))
+                            .tracking(1)
+                            .foregroundColor(profileBrownText.opacity(0.6))
+                        Text(version)
+                            .font(.system(size: 12, weight: .light))
+                            .foregroundColor(profileMutedGold)
+                    }
+                }
+                .padding(.top, 20)
+                .padding(.bottom, 40)
+            }
+        }
+        .navigationTitle("About & Legal")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func legalRow(_ label: String, icon: String, url: URL) -> some View {
+        Link(destination: url) {
+            ProfileMenuRow(icon: icon, label: label) {
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundColor(profileMutedGold)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 // MARK: - Bottom Actions (Sign Out + Delete Account)
 
 private struct ProfileBottomActions: View {
+    @ObservedObject var app: AppState
     @EnvironmentObject private var auth: AuthService
     @State private var showPhoneSignIn = false
     @State private var confirmSignOut = false
@@ -337,7 +370,7 @@ private struct ProfileBottomActions: View {
             Button("Delete", role: .destructive) { Task { await deleteAccount() } }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("This permanently removes your account. Your posts and chats will no longer be tied to you. This can't be undone.")
+            Text("This permanently deletes your account, phone number, posts and photos. Messages you already sent stay in the other person's conversation until it ends. This can't be undone.")
         }
         .alert("Couldn't delete the account", isPresented: $deleteFailed) {
             Button("OK", role: .cancel) { }
@@ -348,6 +381,9 @@ private struct ProfileBottomActions: View {
 
     private func deleteAccount() async {
         do {
+            // Content first: once the auth user is gone we no longer have
+            // permission to delete anything that belonged to it
+            await app.deleteMyContent()
             try await auth.deleteAccount()
         } catch AuthService.DeleteAccountError.needsRecentLogin {
             deleteNeedsReverify = true
