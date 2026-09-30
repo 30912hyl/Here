@@ -207,6 +207,23 @@ final class AppState: ObservableObject {
         }
     }
   
+    // MARK: - My posts
+
+    /// The user's own posts, newest first. Includes private ones.
+    var myPosts: [Post] {
+        posts.filter { $0.authorUID == uid }.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// The nickname this user knows a blocked person by — from a shared
+    /// conversation, if there ever was one. Nicknames are per-thread, so the
+    /// most recent thread wins.
+    func knownNickname(for other: String) -> String? {
+        threads
+            .filter { $0.participants.contains(other) }
+            .sorted { $0.createdAt > $1.createdAt }
+            .first?.nickname
+    }
+
     // MARK: - Blocking
 
     /// People this user has blocked. Their posts and conversations are hidden
