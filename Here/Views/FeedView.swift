@@ -10,6 +10,7 @@ struct FeedView: View {
 
     @State private var selectedTag: String? = nil
     @State private var showAllTags = false
+    @AppStorage("skyStyle") private var skyStyle = 1   // TEMP background exploration
 
     private var tagCounts: [TagCount] {
         var freq: [String: Int] = [:]
@@ -57,6 +58,11 @@ struct FeedView: View {
                         .font(.system(size: 13, weight: .light))
                         .foregroundColor(Color(hex: "#D4C5A0"))
                 }
+            }
+            .contentShape(Rectangle())
+            .onLongPressGesture(minimumDuration: 0.6) {   // TEMP background exploration
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                withAnimation(.easeInOut(duration: 0.4)) { skyStyle = (skyStyle + 1) % 3 }
             }
         } else {
             ZStack(alignment: .top) {
@@ -115,18 +121,48 @@ struct FeedView: View {
 /// 顶部是一片浅香槟金的"天",白色星星在它上面才亮得起来;往下渐变到白,星星随之淡出。
 /// 两者必须一起用:没有这片天,白星星在白底上不可见。
 struct FeedSkyBackground: View {
+    // TEMP exploration: 0 = starry, 1 = frosted warm, 2 = frosted light.
+    // Long-press the tag bar to cycle; remove once one is chosen.
+    @AppStorage("skyStyle") private var style = 1
+
     var body: some View {
         ZStack {
-            LinearGradient(
-                stops: [
-                    .init(color: Color(hex: "#F3E2BC"), location: 0.0),
-                    .init(color: Color(hex: "#FBF2DC"), location: 0.26),
-                    .init(color: Color(hex: "#FFFFFF"), location: 0.50)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            StarryBackgroundView()
+            if style == 0 {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(hex: "#F3E2BC"), location: 0.0),
+                        .init(color: Color(hex: "#FBF2DC"), location: 0.26),
+                        .init(color: Color(hex: "#FFFFFF"), location: 0.50)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                StarryBackgroundView()
+            } else {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(hex: style == 1 ? "#F2E3C4" : "#F8F0E0"), location: 0.0),
+                        .init(color: Color(hex: "#FFFFFF"), location: 0.55)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                FrostedBackgroundView(blobs: style == 1 ? [
+                    .init(color: Color(hex: "#FFFFFF").opacity(0.9), radius: 0.70, base: CGPoint(x: 0.25, y: 0.30),
+                          drift: CGSize(width: 0.12, height: 0.10), period: 38, phase: 0),
+                    .init(color: Color(hex: "#E9C98A").opacity(0.55), radius: 0.80, base: CGPoint(x: 0.80, y: 0.20),
+                          drift: CGSize(width: 0.10, height: 0.12), period: 46, phase: 0.3),
+                    .init(color: Color(hex: "#F6DDCD").opacity(0.30), radius: 0.65, base: CGPoint(x: 0.40, y: 0.55),
+                          drift: CGSize(width: 0.14, height: 0.08), period: 52, phase: 0.6),
+                ] : [
+                    .init(color: Color(hex: "#FFFFFF"), radius: 0.75, base: CGPoint(x: 0.30, y: 0.35),
+                          drift: CGSize(width: 0.12, height: 0.10), period: 40, phase: 0),
+                    .init(color: Color(hex: "#EDD39F").opacity(0.40), radius: 0.85, base: CGPoint(x: 0.85, y: 0.15),
+                          drift: CGSize(width: 0.10, height: 0.10), period: 48, phase: 0.4),
+                    .init(color: Color(hex: "#F5DCCB").opacity(0.30), radius: 0.70, base: CGPoint(x: 0.45, y: 0.80),
+                          drift: CGSize(width: 0.12, height: 0.08), period: 56, phase: 0.7),
+                ], grainOpacity: style == 1 ? 0.05 : 0.04)
+            }
         }
         .ignoresSafeArea()
     }
@@ -143,6 +179,7 @@ struct EmojiTagBar: View {
     let tags: [TagCount]
     @Binding var selectedTag: String?
     let onExpand: () -> Void
+    @AppStorage("skyStyle") private var skyStyle = 1   // TEMP background exploration
 
     var body: some View {
         HStack(spacing: 8) {
@@ -178,6 +215,10 @@ struct EmojiTagBar: View {
                 .padding(.trailing, 16)
             }
         }
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.6).onEnded { _ in
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.easeInOut(duration: 0.4)) { skyStyle = (skyStyle + 1) % 3 }
+        })
     }
 }
 
