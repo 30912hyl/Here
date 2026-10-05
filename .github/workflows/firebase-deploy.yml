@@ -13,6 +13,7 @@ on:
       - firestore.rules
       - storage.rules
       - firebase.json
+      - site/**
       - functions/**
       - .github/workflows/firebase-deploy.yml
   workflow_dispatch:
@@ -58,6 +59,17 @@ jobs:
 
       - name: Deploy rules
         run: firebase deploy --only firestore:rules,storage --project here-a6817 --non-interactive --force
+
+      # Public pages (privacy policy, terms, support) at https://here-a6817.web.app.
+      # Refuses to publish while placeholder tokens are still in the pages.
+      - name: Deploy site
+        run: |
+          if grep -rl '{{' site >/dev/null; then
+            echo "::error::site/ still contains {{PLACEHOLDER}} tokens — fill them in before deploying"
+            grep -rn '{{' site | head
+            exit 1
+          fi
+          firebase deploy --only hosting --project here-a6817 --non-interactive
 
       # Cloud Functions need the Blaze plan plus the Cloud Functions, Cloud Build
       # and Artifact Registry APIs enabled on the project. Until then this step

@@ -38,6 +38,7 @@ struct CreatePostView: View {
     @State private var tags: [String] = []
     @State private var tagInput = ""
     @State private var onlyForMe = false
+    @State private var filterMessage: String?
 
     private let presetTags = ["😄", "😢", "🥰", "😡", "😴", "🍚", "☕️", "🎮", "🎵", "✨"]
     private let maxTags = 10
@@ -50,6 +51,16 @@ struct CreatePostView: View {
     }
 
     var body: some View {
+        content
+            .alert("Can't post this", isPresented: Binding(get: { filterMessage != nil },
+                                                          set: { if !$0 { filterMessage = nil } })) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(filterMessage ?? "")
+            }
+    }
+
+    private var content: some View {
         ZStack {
             cpWarmBG.ignoresSafeArea()
 
@@ -388,6 +399,10 @@ struct CreatePostView: View {
     }
 
     private func submitPost() async {
+        if case .blocked(let reason) = ContentFilter.check(.post, title, bodyText, tags.joined(separator: " ")) {
+            filterMessage = reason
+            return
+        }
         isUploading = true
         await onSubmit(
             title.trimmingCharacters(in: .whitespacesAndNewlines),

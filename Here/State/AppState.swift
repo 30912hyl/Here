@@ -207,6 +207,45 @@ final class AppState: ObservableObject {
         }
     }
   
+    // MARK: - My posts
+
+    /// The user's own posts, newest first. Includes private ones.
+    var myPosts: [Post] {
+        posts.filter { $0.authorUID == uid }.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// The nickname this user knows a blocked person by — from a shared
+    /// conversation, if there ever was one. Nicknames are per-thread, so the
+    /// most recent thread wins.
+    func knownNickname(for other: String) -> String? {
+        threads
+            .filter { $0.participants.contains(other) }
+            .sorted { $0.createdAt > $1.createdAt }
+            .first?.nickname
+    }
+
+    // MARK: - Account deletion
+
+    /// Removes everything this user owns: posts (and their photos), the user
+    /// document (push token, block list, badge count) and voice presence.
+    /// Messages already sent stay in the other participant's conversation —
+    /// they are shared content — but nothing links them to a person once the
+    /// auth user is deleted. Best effort: a failure on one item doesn't stop
+    /// the rest, because the account is going away regardless.
+    func deleteMyContent() async {
+        guard !uid.isEmpty else { return }
+        let me = uid
+        voice.setAvailable(false)
+        for post in posts where post.authorUID == me {
+            guard let id = post.id else { continue }
+            try? await db.collection("posts").document(id).delete()
+        }
+        await StorageService.deleteAllImages(forUser: me)
+        try? await db.collection("users").document(me).delete()
+        UserDefaults.standard.removeObject(forKey: Self.reportedPostIdsKey)
+        reportedPostIds = []
+    }
+
     // MARK: - Blocking
 
     /// People this user has blocked. Their posts and conversations are hidden

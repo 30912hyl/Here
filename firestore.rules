@@ -9,14 +9,40 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Writing (posting, chatting, voice presence) needs a verified phone number.
+    // Moderation happens per number: a verified report → the number goes into
+    // /bannedPhones and every account behind it becomes read-only. When
+    // /settings/moderation.requireApproval is true (emergency switch), only
+    // numbers listed in /approvedPhones may write — new sign-ups wait for review.
+    // Both collections are written from the console only; clients never read them.
+    function phone() {
+      return request.auth.token.phone_number;
+    }
+    function phoneVerified() {
+      return signedIn() && phone() != null;
+    }
+    function banned() {
+      return exists(/databases/$(database)/documents/bannedPhones/$(phone()));
+    }
+    function approvalRequired() {
+      return exists(/databases/$(database)/documents/settings/moderation)
+        && get(/databases/$(database)/documents/settings/moderation).data.requireApproval == true;
+    }
+    function approved() {
+      return exists(/databases/$(database)/documents/approvedPhones/$(phone()));
+    }
+    function canWrite() {
+      return phoneVerified() && !banned() && (!approvalRequired() || approved());
+    }
+
     match /posts/{postId} {
       // NOTE: private ("just for me") posts are currently filtered client-side
       // only — the feed queries the whole collection, so read access must stay
       // collection-wide. Locking isPrivate posts down server-side requires
       // changing the app's queries first.
       allow read: if signedIn();
-      // You can only create posts as yourself
-      allow create: if signedIn()
+      // You can only create posts as yourself, and only with a phone in good standing
+      allow create: if canWrite()
         && request.resource.data.authorUID == request.auth.uid;
       // Author can edit their post; everyone else may only touch like fields
       allow update: if signedIn() && (
@@ -33,7 +59,7 @@ service cloud.firestore {
       allow read, update: if signedIn()
         && request.auth.uid in resource.data.participants;
       // You can only create a thread you are part of
-      allow create: if signedIn()
+      allow create: if canWrite()
         && request.auth.uid in request.resource.data.participants;
 
       match /messages/{messageId} {
@@ -44,7 +70,7 @@ service cloud.firestore {
         // senderUID is pinned so a participant can't forge messages as the
         // other person. 'system' stays writable because the app itself creates
         // system messages from the client (thread start, extensions).
-        allow create: if signedIn()
+        allow create: if canWrite()
           && request.auth.uid in
             get(/databases/$(database)/documents/threads/$(threadId))
               .data.participants
@@ -59,6 +85,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
+
+    // Moderation data: console-only. No client may read or write.
+    match /bannedPhones/{phone} { allow read, write: if false; }
+    match /approvedPhones/{phone} { allow read, write: if false; }
+    match /settings/{doc} { allow read, write: if false; }
 
     // Abuse reports. Write-only for clients: anyone signed in can file a
     // report as themselves, nobody can read, edit or delete one. Moderators
@@ -78,7 +109,7 @@ service cloud.firestore {
     // { available: bool, lastSeen: server timestamp }
     match /voicePresence/{userId} {
       allow read: if signedIn();
-      allow write: if signedIn() && request.auth.uid == userId
+      allow write: if canWrite() && request.auth.uid == userId
         && request.resource.data.keys().hasOnly(['available', 'lastSeen'])
         && request.resource.data.available is bool
         && request.resource.data.lastSeen == request.time;

@@ -7,6 +7,9 @@ struct ChatDetailView: View {
     @State private var input = ""
     @State private var showEndedActions = false
     @State private var showBlockConfirm = false
+    @State private var filterMessage: String?
+    @State private var contactWarning: String?
+    @State private var pendingText: String?
     @FocusState private var inputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -148,6 +151,22 @@ struct ChatDetailView: View {
                 }
             }
         }
+        .alert("Share contact details?", isPresented: Binding(get: { contactWarning != nil },
+                                                               set: { if !$0 { contactWarning = nil } })) {
+            Button("Send anyway") {
+                if let text = pendingText { deliver(text) }
+                pendingText = nil
+            }
+            Button("Cancel", role: .cancel) { pendingText = nil }
+        } message: {
+            Text(contactWarning ?? "")
+        }
+        .alert("Can't send this", isPresented: Binding(get: { filterMessage != nil },
+                                                        set: { if !$0 { filterMessage = nil } })) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(filterMessage ?? "")
+        }
         .alert("Block this person?", isPresented: $showBlockConfirm) {
             Button("Block", role: .destructive) {
                 Task { await app.blockUser(in: thread) }
@@ -170,14 +189,28 @@ struct ChatDetailView: View {
     // MARK: - Sending
 
     /// Single send path for the arrow button and the keyboard's Send key.
-    ///
+    private func send() {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        switch ContentFilter.check(.message, text) {
+        case .blocked(let reason):
+            filterMessage = reason   // keep the text so they can edit it
+            return
+        case .confirm(let warning):
+            pendingText = text
+            contactWarning = warning
+            return
+        case .ok:
+            break
+        }
+        deliver(text)
+    }
+
     /// Issue #14: the field sometimes kept its text after sending. Clearing the
     /// binding synchronously can be overwritten by UIKit committing pending
     /// autocorrect/marked text (e.g. pinyin composition) in the same run loop,
     /// so the clear is applied again on the next turn of the loop.
-    private func send() {
-        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+    private func deliver(_ text: String) {
         input = ""
         DispatchQueue.main.async { input = "" }
         Task { await app.sendMessage(threadId: threadId, text: text) }
