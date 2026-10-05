@@ -6,6 +6,7 @@
 //
 
 import FirebaseAuth
+import FirebaseFirestore
 import Foundation
 
 /// Two tiers of identity:
@@ -74,6 +75,19 @@ final class AuthService: ObservableObject {
             }
         }
         _ = try await Auth.auth().signIn(with: credential)
+    }
+
+    /// Bump when the terms change materially; users re-accept on next sign-in.
+    static let termsVersion = "2026-10"
+
+    /// Stores that this account confirmed 18+ and accepted the terms (Apple
+    /// requires UGC apps to have users agree to terms before posting).
+    func recordTermsAcceptance() async {
+        guard let uid else { return }
+        try? await Firestore.firestore().collection("users").document(uid).setData([
+            "termsVersion": Self.termsVersion,
+            "termsAcceptedAt": FieldValue.serverTimestamp()
+        ], merge: true)
     }
 
     // MARK: - Session

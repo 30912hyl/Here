@@ -18,6 +18,7 @@ struct PhoneSignInSheet: View {
     @State private var verificationID: String?
     @State private var busy = false
     @State private var errorText: String?
+    @State private var agreed = false
     @FocusState private var focused: Bool
 
     private let gold = Color(hex: "#D9AE52")
@@ -43,7 +44,12 @@ struct PhoneSignInSheet: View {
                     .foregroundColor(muted)
             }
 
-            if step == .phone { phoneFields } else { codeField }
+            if step == .phone {
+                phoneFields
+                agreement
+            } else {
+                codeField
+            }
 
             if let errorText {
                 Text(errorText)
@@ -128,7 +134,34 @@ struct PhoneSignInSheet: View {
     }
 
     private var primaryEnabled: Bool {
-        step == .phone ? phoneLooksValid : code.count == 6
+        step == .phone ? phoneLooksValid && agreed : code.count == 6
+    }
+
+    private var agreement: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button { agreed.toggle() } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 5)
+                        .stroke(agreed ? gold : Color(hex: "#DDD2B4"), lineWidth: 1)
+                        .frame(width: 20, height: 20)
+                    if agreed {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(gold)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("I'm 18 or older and agree to the Terms and Community Guidelines")
+            .accessibilityAddTraits(agreed ? .isSelected : [])
+
+            (Text("I'm 18 or older and agree to the ")
+                + Text("[Terms & Community Guidelines](\(AppLinks.terms.absoluteString))").foregroundColor(gold)
+                + Text(". There's no tolerance for abuse or objectionable content."))
+                .font(.system(size: 13, weight: .light))
+                .foregroundColor(muted)
+                .tint(gold)
+        }
     }
 
     private func primaryAction() {
@@ -146,6 +179,7 @@ struct PhoneSignInSheet: View {
                 case .code:
                     guard let verificationID else { return }
                     try await auth.confirmCode(verificationID: verificationID, code: code)
+                    await auth.recordTermsAcceptance()
                     dismiss()
                     onVerified?()
                 }

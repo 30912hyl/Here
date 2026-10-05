@@ -7,6 +7,7 @@ struct ChatDetailView: View {
     @State private var input = ""
     @State private var showEndedActions = false
     @State private var showBlockConfirm = false
+    @State private var filterMessage: String?
     @FocusState private var inputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -148,6 +149,12 @@ struct ChatDetailView: View {
                 }
             }
         }
+        .alert("Can't send this", isPresented: Binding(get: { filterMessage != nil },
+                                                        set: { if !$0 { filterMessage = nil } })) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(filterMessage ?? "")
+        }
         .alert("Block this person?", isPresented: $showBlockConfirm) {
             Button("Block", role: .destructive) {
                 Task { await app.blockUser(in: thread) }
@@ -178,6 +185,10 @@ struct ChatDetailView: View {
     private func send() {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+        if case .blocked(let reason) = ContentFilter.check(.message, text) {
+            filterMessage = reason   // keep the text so they can edit it
+            return
+        }
         input = ""
         DispatchQueue.main.async { input = "" }
         Task { await app.sendMessage(threadId: threadId, text: text) }
