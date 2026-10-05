@@ -7,12 +7,14 @@ import Foundation
 /// Deliberately narrow: people come here to say how they feel, including dark
 /// feelings, so expressing sadness or self-harm thoughts is NOT filtered. What
 /// is blocked: slurs, telling someone to kill themselves, sexual solicitation,
-/// and contact details / links (the community guidelines forbid sharing
-/// personal information with strangers).
+/// and contact details / links in public posts. In private chats, contact
+/// details are allowed after the sender confirms a safety reminder.
 enum ContentFilter {
     enum Verdict: Equatable {
         case ok
         case blocked(String)
+        /// Allowed, but the sender should confirm first (contact details in a private chat)
+        case confirm(String)
     }
 
     /// Posts are self-expression: people quote what was done or said to them
@@ -20,9 +22,6 @@ enum ContentFilter {
     /// contact details are filtered there. Messages are directed at a stranger,
     /// so harassment and sexual solicitation are filtered too.
     enum Context { case post, message }
-
-    /// When false, contact details and links are allowed through.
-    static var blocksContactInfo = true
 
     static func check(_ context: Context, _ texts: String...) -> Verdict {
         let raw = texts.joined(separator: "\n")
@@ -41,8 +40,16 @@ enum ContentFilter {
                 return .blocked("Sexual requests aren't allowed here.")
             }
         }
-        if blocksContactInfo, containsContactInfo(raw) {
-            return .blocked("For everyone's safety, please don't share phone numbers, emails, social handles, or links.")
+        if containsContactInfo(raw) {
+            // Public posts: never. Private chats: the person's call, after a
+            // reminder — hard-blocking mostly stops genuine connections, while
+            // someone determined just spells the number out.
+            switch context {
+            case .post:
+                return .blocked("For everyone's safety, phone numbers, emails, social handles and links can't be shared in posts.")
+            case .message:
+                return .confirm("You're about to share contact details with someone you met here. Once you move off Here, reporting and blocking can't protect you. Only share if you trust them.")
+            }
         }
         return .ok
     }
