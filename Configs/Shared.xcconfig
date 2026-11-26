@@ -17,4 +17,8 @@ PRODUCT_BUNDLE_IDENTIFIER = dev.hylee.Here
 //
 HERE_PUSH_ENTITLEMENTS =
 
+// URL scheme for phone sign-in + export-compliance flag (merged with the
+// generated Info.plist).
+INFOPLIST_FILE = Configs/Here-Info.plist
+
 #include? "Local.xcconfig"

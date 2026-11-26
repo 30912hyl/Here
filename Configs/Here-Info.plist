@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Extra Info.plist keys for the Here app. Xcode merges this with the keys it
+  generates from the INFOPLIST_KEY_* build settings (GENERATE_INFOPLIST_FILE).
+  Lives in Configs/, outside the synced Here/ folder, so it isn't also copied
+  into the app as a resource.
+-->
+<plist version="1.0">
+<dict>
+	<!--
+	  Phone sign-in: Firebase falls back to a reCAPTCHA web page when it can't
+	  use a silent push, and returns to the app through this URL scheme. Without
+	  it, verifyPhoneNumber stops the app with fatalError. The scheme is the
+	  GOOGLE_APP_ID from GoogleService-Info.plist with ":" replaced by "-".
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-643542317236-ios-85434e371430902e117fe1</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Only standard HTTPS/TLS: no export-compliance paperwork needed. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+</dict>
+</plist>

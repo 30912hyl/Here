@@ -2,6 +2,9 @@ import SwiftUI
 
 /// Phone-number verification: enter number → enter SMS code. Presented the
 /// first time someone tries to post, chat or join voice, and from Profile.
+///
+/// 样子是 2026-11-25 的草稿(等她看):和举报、确认条款那两张用同一套零件(SheetParts.swift)。
+/// 每一句英文和流程都没有动。
 struct PhoneSignInSheet: View {
     @EnvironmentObject private var auth: AuthService
     @Environment(\.dismiss) private var dismiss
@@ -9,6 +12,9 @@ struct PhoneSignInSheet: View {
     /// Why we're asking — shown under the title so the gate never feels arbitrary.
     var reason: String = "Posting and chatting need a verified phone number. It's never shown to anyone."
     var onVerified: (() -> Void)? = nil
+    /// true = 只是从检查面板打开看样子:Send code 只是翻到"输入验证码"那一步,Verify 只是关掉。
+    /// 不发短信、不登录、不记录任何东西。
+    var preview = false
 
     private enum Step { case phone, code }
     @State private var step: Step = .phone
@@ -21,11 +27,6 @@ struct PhoneSignInSheet: View {
     @State private var agreed = false
     @FocusState private var focused: Bool
 
-    private let gold = Color(hex: "#D9AE52")
-    private let hairline = Color(hex: "#EFE6CF")
-    private let ink = Color(hex: "#3A3324")
-    private let muted = Color(hex: "#8E8672")
-
     private var e164: String {
         countryCode + localNumber.filter(\.isNumber)
     }
@@ -35,137 +36,99 @@ struct PhoneSignInSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(step == .phone ? "Verify your phone" : "Enter the code")
-                    .font(.system(size: 20, weight: .regular))
-                    .foregroundColor(ink)
-                Text(step == .phone ? reason : "We sent a 6-digit code to \(e164).")
-                    .font(.system(size: 13, weight: .light))
-                    .foregroundColor(muted)
-            }
+            SheetHeader(
+                title: step == .phone ? "Verify your phone" : "Enter the code",
+                message: step == .phone ? reason : "We sent a 6-digit code to \(e164)."
+            )
 
             if step == .phone {
                 phoneFields
-                agreement
+                SheetAgreement(agreed: $agreed)
             } else {
                 codeField
             }
 
             if let errorText {
+                // 出错的那一句:原来那个偏红的棕色留着(这是整个 app 里唯一一处"出错了"的字,颜色还没和她定过)
                 Text(errorText)
-                    .font(.system(size: 13, weight: .light))
+                    .font(Theme.ui(14, .medium))
                     .foregroundColor(Color(hex: "#B3543E"))
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            Button(action: primaryAction) {
-                ZStack {
-                    Text(step == .phone ? "Send code" : "Verify")
-                        .opacity(busy ? 0 : 1)
-                    if busy { ProgressView().tint(.white) }
-                }
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Capsule().fill(primaryEnabled ? gold : Color(hex: "#EADFC2")))
-            }
-            .disabled(!primaryEnabled || busy)
+            VStack(spacing: 6) {
+                SheetPrimaryButton(title: step == .phone ? "Send code" : "Verify",
+                                   enabled: primaryEnabled, busy: busy, action: primaryAction)
 
-            if step == .code {
-                Button("Use a different number") {
-                    step = .phone
-                    code = ""
-                    errorText = nil
+                if step == .code {
+                    SheetQuietButton(title: "Use a different number") {
+                        step = .phone
+                        code = ""
+                        errorText = nil
+                    }
                 }
-                .font(.system(size: 13, weight: .light))
-                .foregroundColor(muted)
-                .frame(maxWidth: .infinity)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 28)
+        .padding(.horizontal, 20)
+        .padding(.top, 30)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(.white)
+        .presentationBackground(Theme.paper)
         .onAppear { focused = true }
     }
 
     private var phoneFields: some View {
         HStack(spacing: 10) {
-            TextField("+1", text: $countryCode)
+            TextField("", text: $countryCode, prompt: Text("+1").foregroundColor(Theme.ink3))
                 .keyboardType(.phonePad)
-                .frame(width: 64)
+                .frame(width: 68)
                 .multilineTextAlignment(.center)
-                .padding(.vertical, 12)
-                .background(fieldBackground)
-            TextField("Phone number", text: $localNumber)
+                .frame(height: 52)
+                .background(SheetFieldBackground())
+            TextField("", text: $localNumber, prompt: Text("Phone number").foregroundColor(Theme.ink3))
                 .keyboardType(.phonePad)
                 .textContentType(.telephoneNumber)
                 .focused($focused)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(fieldBackground)
+                .padding(.horizontal, 16)
+                .frame(height: 52)
+                .background(SheetFieldBackground())
         }
-        .font(.system(size: 17, weight: .light))
+        .font(Theme.ui(17))
+        .foregroundColor(Theme.ink)
+        .tint(Theme.ink)
     }
 
     private var codeField: some View {
-        TextField("123456", text: $code)
+        TextField("", text: $code, prompt: Text("123456").foregroundColor(Theme.tabOff))
             .keyboardType(.numberPad)
             .textContentType(.oneTimeCode)
             .focused($focused)
-            .font(.system(size: 24, weight: .light))
+            .font(Theme.ui(24, .medium))
             .tracking(6)
+            .foregroundColor(Theme.ink)
+            .tint(Theme.ink)
             .multilineTextAlignment(.center)
-            .padding(.vertical, 12)
-            .background(fieldBackground)
+            .frame(height: 60)
+            .background(SheetFieldBackground())
             .onChange(of: code) {
                 code = String(code.filter(\.isNumber).prefix(6))
                 if code.count == 6 { primaryAction() }
             }
     }
 
-    private var fieldBackground: some View {
-        RoundedRectangle(cornerRadius: 12)
-            .fill(Color(hex: "#FDFAF2"))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(hairline, lineWidth: 1))
-    }
-
     private var primaryEnabled: Bool {
         step == .phone ? phoneLooksValid && agreed : code.count == 6
     }
 
-    private var agreement: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Button { agreed.toggle() } label: {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 5)
-                        .stroke(agreed ? gold : Color(hex: "#DDD2B4"), lineWidth: 1)
-                        .frame(width: 20, height: 20)
-                    if agreed {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(gold)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("I'm 18 or older and agree to the Terms and Community Guidelines")
-            .accessibilityAddTraits(agreed ? .isSelected : [])
-
-            (Text("I'm 18 or older and agree to the ")
-                + Text("[Terms & Community Guidelines](\(AppLinks.terms.absoluteString))").foregroundColor(gold)
-                + Text(". There's no tolerance for abuse or objectionable content."))
-                .font(.system(size: 13, weight: .light))
-                .foregroundColor(muted)
-                .tint(gold)
-        }
-    }
-
     private func primaryAction() {
         guard !busy else { return }
+        if preview {
+            // 只看样子:不发短信、不登录
+            if step == .phone { code = ""; step = .code } else { dismiss() }
+            return
+        }
         errorText = nil
         busy = true
         Task {
@@ -178,6 +141,8 @@ struct PhoneSignInSheet: View {
                     step = .code
                 case .code:
                     guard let verificationID else { return }
+                    auth.isVerifyingPhone = true
+                    defer { auth.isVerifyingPhone = false }
                     try await auth.confirmCode(verificationID: verificationID, code: code)
                     await auth.recordTermsAcceptance()
                     dismiss()
@@ -197,13 +162,21 @@ struct PhoneSignInSheet: View {
         case 17010: return "Too many attempts. Please wait a while and try again."    // tooManyRequests
         case 17020: return "You're offline. Check your connection and try again."     // networkError
         case 17041: return "That doesn't look like a valid phone number."             // invalidPhoneNumber
-        default:    return "Something went wrong. Please try again."
+        default:
+            #if targetEnvironment(simulator)
+            // 只在模拟器里：把真正的错误写出来，方便查。真机上还是下面那一句。
+            let name = ns.userInfo["FIRAuthErrorUserInfoNameKey"] as? String ?? ns.domain
+            print("phone sign-in failed:", ns)
+            return "Something went wrong. Please try again. [\(ns.code) \(name)]"
+            #else
+            return "Something went wrong. Please try again."
+            #endif
         }
     }
 }
 
 #Preview {
-    Color.white.sheet(isPresented: .constant(true)) {
+    Theme.paper.sheet(isPresented: .constant(true)) {
         PhoneSignInSheet().environmentObject(AuthService())
     }
 }

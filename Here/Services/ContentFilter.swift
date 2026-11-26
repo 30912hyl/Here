@@ -48,7 +48,7 @@ enum ContentFilter {
             case .post:
                 return .blocked("For everyone's safety, phone numbers, emails, social handles and links can't be shared in posts.")
             case .message:
-                return .confirm("You're about to share contact details with someone you met here. Once you move off Here, reporting and blocking can't protect you. Only share if you trust them.")
+                return .confirm("You're about to share contact details with someone you met here. Once you move off Here, reporting and blocking can't protect you. Only share if you trust her.")
             }
         }
         return .ok
@@ -116,8 +116,18 @@ enum ContentFilter {
         var out = ""
         var last: Character = " "
         var run = 0
-        for ch in folded {
+        let chars = Array(folded)
+        for (index, ch) in chars.enumerated() {
             var c = leet[ch] ?? ch
+            // A "!" is only a disguised "i" when a letter follows it ("k!ll"). Anywhere
+            // else it is punctuation. Reading every "!" as a letter glued an "i" onto the
+            // word before it, so "... yourself!" slipped through. Same rule as the server
+            // (functions/lib/textFilter.js).
+            if ch == "!" {
+                let next: Character? = index + 1 < chars.count ? chars[index + 1] : nil
+                let letterFollows = next.map { $0 != "!" && (leet[$0] ?? $0).isLetter } ?? false
+                c = letterFollows ? "i" : " "
+            }
             if !c.isLetter { c = " " }
             if c == last {
                 run += 1

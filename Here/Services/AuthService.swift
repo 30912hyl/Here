@@ -20,6 +20,9 @@ final class AuthService: ObservableObject {
     @Published var uid: String?
     @Published var isSignedIn = false
     @Published var phoneNumber: String?
+    /// True from submitting the SMS code until the terms acceptance is saved,
+    /// so nothing else (e.g. the terms-update sheet) pops up in between.
+    @Published var isVerifyingPhone = false
 
     var isPhoneVerified: Bool { phoneNumber != nil }
     var memberSince: Date? { Auth.auth().currentUser?.metadata.creationDate }
@@ -66,25 +69,47 @@ final class AuthService: ObservableObject {
         if let user = Auth.auth().currentUser, user.isAnonymous {
             do {
                 _ = try await user.link(with: credential)
+                // Linking keeps the same user, so the state listener above is NOT
+                // called: without this the app goes on thinking the phone is
+                // unverified until it is restarted (the composer opens once, then
+                // "Chat privately" asks to verify again). Found 2026-11-26 in the
+                // first real sign-in with test numbers.
+                apply(Auth.auth().currentUser)
                 return
             } catch let error as NSError
                 where error.code == AuthErrorCode.credentialAlreadyInUse.rawValue {
-                // Fall through: the number has an account already — become it.
+                // The number has an account already — become it. The failed
+                // link used up the SMS code, so Firebase hands back a fresh
+                // credential for exactly this; the original would be rejected.
                 // The throwaway anonymous user is left behind; it owns nothing
                 // that matters (reading requires no identity).
+                let updated = error.userInfo["FIRAuthErrorUserInfoUpdatedCredentialKey"] as? AuthCredential
+                _ = try await Auth.auth().signIn(with: updated ?? credential)
+                return
             }
+        }
+        if let user = Auth.auth().currentUser, !user.isAnonymous {
+            // Already signed in with a phone: this is the "confirm your number"
+            // step before deleting the account. Re-authenticate the SAME
+            // account; a different number fails instead of switching accounts.
+            _ = try await user.reauthenticate(with: credential)
+            return
         }
         _ = try await Auth.auth().signIn(with: credential)
     }
 
-    /// Bump when the terms change materially; users re-accept on next sign-in.
-    static let termsVersion = "2026-10"
+    /// Bump when the terms change materially: phone-verified accounts on an
+    /// older version are asked to confirm again (ContentView → TermsUpdateSheet).
+    /// "2026-10b" added the confirmation of being a woman.
+    static let termsVersion = "2026-10b"
 
-    /// Stores that this account confirmed 18+ and accepted the terms (Apple
-    /// requires UGC apps to have users agree to terms before posting).
+    /// Stores that this account confirmed being a woman and 18+ and accepted
+    /// the terms (Apple requires UGC apps to have users agree to terms before
+    /// posting; the attestation is what a ban for a fake identity rests on).
     func recordTermsAcceptance() async {
         guard let uid else { return }
         try? await Firestore.firestore().collection("users").document(uid).setData([
+            "womanAttested": true,
             "termsVersion": Self.termsVersion,
             "termsAcceptedAt": FieldValue.serverTimestamp()
         ], merge: true)
@@ -95,6 +120,16 @@ final class AuthService: ObservableObject {
     /// Back to an anonymous, read-only session. Signing in with the same
     /// phone number later restores the account.
     func signOut() async {
+        // Detach this phone's push token first, so a signed-out device stops
+        // showing this account's message previews.
+        // Wait at most 3s: offline, the delete stays queued, but it must not
+        // hold the sign-out hostage until the phone reconnects.
+        if let uid {
+            let ref = Firestore.firestore().collection("users").document(uid)
+            _ = try? await waitForWrite(atMost: 3) { done in
+                ref.updateData(["fcmToken": FieldValue.delete()], completion: done)
+            }
+        }
         do {
             try Auth.auth().signOut()
         } catch {

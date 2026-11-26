@@ -39,7 +39,10 @@ final class PushManager: NSObject, ObservableObject {
     /// Once auth is ready, any token received earlier can be stored under the user.
     func userSignedIn(uid: String) {
         self.uid = uid
-        if let token = pendingToken {
+        // Also covers switching accounts (sign-out, or signing in with an
+        // existing number on a new install): the token Firebase already has
+        // must be saved under the new uid, or that account gets no pushes.
+        if let token = pendingToken ?? Messaging.messaging().fcmToken {
             saveToken(token)
         }
     }

@@ -40,8 +40,18 @@ enum RemoteImagePhase {
     case failure
 }
 
+/// Downloaded image bytes (compressed, a few hundred KB each), so an image that scrolled away can
+/// come back without a network trip. NSCache drops entries by itself when memory runs low.
+private let remoteImageDataCache: NSCache<NSURL, NSData> = {
+    let cache = NSCache<NSURL, NSData>()
+    cache.totalCostLimit = 60 * 1024 * 1024
+    return cache
+}()
+
 /// Drop-in replacement for AsyncImage that decodes downsampled.
-/// Downloads go through URLSession.shared, so responses are URLCache-backed.
+/// The decoded bitmap is released when the view leaves the screen (the feed is a lazy stack that
+/// keeps every page it has created, so without this every photo scrolled past stayed in memory)
+/// and rebuilt from the byte cache when it comes back.
 struct RemoteImageView<Content: View>: View {
     let url: URL?
     let maxPixelSize: CGFloat
@@ -54,6 +64,9 @@ struct RemoteImageView<Content: View>: View {
             .task(id: url) {
                 await load()
             }
+            .onDisappear {
+                phase = .loading
+            }
     }
 
     private func load() async {
@@ -61,9 +74,16 @@ struct RemoteImageView<Content: View>: View {
             phase = .failure
             return
         }
+        if let cached = remoteImageDataCache.object(forKey: url as NSURL) {
+            if let image = UIImage.downsampled(data: cached as Data, maxPixelSize: maxPixelSize) {
+                phase = .success(Image(uiImage: image))
+                return
+            }
+        }
         for attempt in 1...remoteImageMaxAttempts {
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
+                remoteImageDataCache.setObject(data as NSData, forKey: url as NSURL, cost: data.count)
                 if let image = UIImage.downsampled(data: data, maxPixelSize: maxPixelSize) {
                     phase = .success(Image(uiImage: image))
                 } else {
