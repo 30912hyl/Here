@@ -35,46 +35,280 @@ service cloud.firestore {
       return phoneVerified() && !banned() && (!approvalRequired() || approved());
     }
 
+    // The other person in a two-person list.
+    function otherOf(participants) {
+      return participants[0] == request.auth.uid ? participants[1] : participants[0];
+    }
+    // True when `other` has put the signed-in user on her block list. Block
+    // lists stay private: this only ever answers yes or no, and only about
+    // the person asking.
+    function hasBlockedMe(other) {
+      return exists(/databases/$(database)/documents/users/$(other))
+        && request.auth.uid in get(/databases/$(database)/documents/users/$(other)).data.get('blocked', []);
+    }
+
     match /posts/{postId} {
-      // NOTE: private ("just for me") posts are currently filtered client-side
-      // only — the feed queries the whole collection, so read access must stay
-      // collection-wide. Locking isPrivate posts down server-side requires
-      // changing the app's queries first.
-      allow read: if signedIn();
-      // You can only create posts as yourself, and only with a phone in good standing
+      // Liking/unliking: only your own uid, count moves by exactly one.
+      function isOwnLikeToggle() {
+        let before = resource.data.get('likedBy', []).toSet();
+        let after = request.resource.data.get('likedBy', []).toSet();
+        let me = [request.auth.uid].toSet();
+        let oldCount = resource.data.get('likeCount', 0);
+        let newCount = request.resource.data.get('likeCount', 0);
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount', 'likedBy'])
+          && (
+            (after.difference(before) == me && before.difference(after).size() == 0
+              && newCount == oldCount + 1)
+            || (before.difference(after) == me && after.difference(before).size() == 0
+              && (newCount == oldCount - 1 || (oldCount <= 0 && newCount == oldCount)))
+          );
+      }
+
+      // A photo URL must be a Firebase Storage download URL inside the
+      // author's own folder (posts/{uid}/...) of this project's own bucket,
+      // under either name Firebase gives a default bucket. Anything else
+      // would be an image we cannot check, which its owner could swap after
+      // posting and whose host could log who views it. (The iOS SDK writes
+      // the host with an explicit :443.)
+      function ownPhoto(url) {
+        return url is string
+          && url.matches('https://firebasestorage[.]googleapis[.]com(:443)?/v0/b/here-a6817[.](firebasestorage[.]app|appspot[.]com)/o/posts%2F'
+                         + request.auth.uid + '%2F[^?#]+([?].*)?');
+      }
+      function ownPhotos(urls) {
+        return urls is list
+          && (urls.size() < 1 || ownPhoto(urls[0]))
+          && (urls.size() < 2 || ownPhoto(urls[1]))
+          && (urls.size() < 3 || ownPhoto(urls[2]))
+          && (urls.size() < 4 || ownPhoto(urls[3]))
+          && (urls.size() < 5 || ownPhoto(urls[4]))
+          && (urls.size() < 6 || ownPhoto(urls[5]))
+          && (urls.size() < 7 || ownPhoto(urls[6]))
+          && (urls.size() < 8 || ownPhoto(urls[7]))
+          && (urls.size() < 9 || ownPhoto(urls[8]))
+          && (urls.size() < 10 || ownPhoto(urls[9]));
+      }
+
+      // Public posts are readable by anyone signed in; a private ("just for
+      // me") post only by its author. Rules are not filters, so a query has
+      // to ask for one or the other: the feed asks for isPrivate == false
+      // (needs the index in firestore.indexes.json), My Posts asks for
+      // authorUID == me.
+      allow read: if signedIn()
+        && (resource.data.authorUID == request.auth.uid
+            || resource.data.isPrivate == false);
+
+      // New posts: as yourself, phone in good standing, fresh counters, a
+      // normal 48h lifetime (small allowance for device clock drift), sane sizes.
       allow create: if canWrite()
-        && request.resource.data.authorUID == request.auth.uid;
-      // Author can edit their post; everyone else may only touch like fields
-      allow update: if signedIn() && (
-        resource.data.authorUID == request.auth.uid ||
-        request.resource.data.diff(resource.data)
-          .affectedKeys().hasOnly(['likeCount', 'likedBy'])
-      );
+        && request.resource.data.authorUID == request.auth.uid
+        && request.resource.data.get('likeCount', 0) == 0
+        && request.resource.data.get('likedBy', []).size() == 0
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt <= request.time + duration.value(50, 'h')
+        && request.resource.data.createdAt <= request.time + duration.value(2, 'h')
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 1000
+        && request.resource.data.get('bodyText', '').size() <= 20000
+        && request.resource.data.get('imageURLs', []).size() <= 10
+        && ownPhotos(request.resource.data.get('imageURLs', []))
+        && request.resource.data.get('tags', []).size() <= 10;
+
+      // Posts are never edited. The only change anyone may make is liking or
+      // unliking: add or remove your own uid and move the count by one.
+      allow update: if signedIn() && isOwnLikeToggle();
+
       allow delete: if signedIn()
         && resource.data.authorUID == request.auth.uid;
     }
 
     match /threads/{threadId} {
-      // Only the two participants can see or update a conversation
-      allow read, update: if signedIn()
+      // The single 48h extension: both participants already answered yes,
+      // it hasn't been used, the chat wasn't ended, and the new expiry is ~48h out.
+      //
+      // The question "talk for another 48 hours?" stays open for 24 hours
+      // after the conversation ran out (ChatThread.decisionWindow in the
+      // app). After that it is over for good: without the check below, two
+      // yeses given a week later would still bring it back. Five minutes of
+      // allowance for device clock drift, the same as for messages.
+      function isTheOneExtension() {
+        let p = resource.data.participants;
+        return resource.data.get('kind', '') != 'founder'
+          && resource.data.get('hasExtendedOnce', false) == false
+          && request.resource.data.hasExtendedOnce == true
+          && resource.data.get('isManuallyFrozen', false) == false
+          && request.resource.data.get('isManuallyFrozen', false) == false
+          && resource.data.continueChoices.get(p[0], '') == 'yes'
+          && resource.data.continueChoices.get(p[1], '') == 'yes'
+          && resource.data.expiresAt > request.time - duration.value(24, 'h') - duration.value(5, 'm')
+          && request.resource.data.expiresAt <= request.time + duration.value(50, 'h');
+      }
+
+      // A conversation starts from a post: it has to name a public post
+      // that is still live, and the other participant has to be that post's
+      // author. Nobody can open a conversation with an arbitrary account.
+      // (A missing postId or a post that no longer exists makes this an
+      // error, which denies the request.)
+      function startsFromLivePost(t) {
+        let post = get(/databases/$(database)/documents/posts/$(t.postId)).data;
+        return post.authorUID == otherOf(t.participants)
+          && post.get('isPrivate', false) == false
+          && post.expiresAt > request.time;
+      }
+
+      // The one conversation that does not start from a post: the one with
+      // the founder. Who the founder is comes from /config/app (written in
+      // the console only), so nobody can pass any other account off as her.
+      // There is one such conversation per person, under a fixed id, and the
+      // person opens it herself: the founder cannot start one with anybody.
+      //
+      // It has no 48 hours. config/app.founderThreadHours says how long it
+      // lasts; absent or 0 means it never runs out, which is written as one
+      // fixed far-away date so that everything that reads expiresAt keeps
+      // working. (A missing config/app makes this an error, which denies
+      // the request: without a founder there is no such conversation.)
+      function startsWithFounder(t) {
+        let cfg = get(/databases/$(database)/documents/config/app).data;
+        let founder = cfg.get('founderUID', '');
+        let hours = cfg.get('founderThreadHours', 0);
+        return founder is string
+          && founder != ''
+          && request.auth.uid != founder
+          && otherOf(t.participants) == founder
+          && !('postId' in t)
+          && threadId == 'founder_' + request.auth.uid
+          && hours is int
+          && (hours > 0
+              ? t.expiresAt <= request.time + duration.value(hours + 2, 'h')
+              : t.expiresAt == timestamp.date(2100, 1, 1));
+      }
+
+      // Exactly the fields the app writes (Here/Models/ChatThread.swift),
+      // plus `kind` for the conversation with the founder. Everything else
+      // on a conversation is written by the server (hasPhotos,
+      // deleteAfter, timeUpPushAt) and must not be
+      // set by whoever creates it.
+      function onlyAppFields(t) {
+        return t.keys().hasOnly(['postId', 'postTitle', 'participants', 'createdAt', 'expiresAt',
+                                 'isManuallyFrozen', 'hasExtendedOnce', 'continueChoices',
+                                 'nickname', 'lastRead', 'kind']);
+      }
+
+      // Only the two participants can see a conversation
+      allow read: if signedIn()
         && request.auth.uid in resource.data.participants;
-      // You can only create a thread you are part of
+
+      // You can only create a fresh conversation you are part of: from a
+      // live post, or the one with the founder.
+      //
+      // Ids that begin with "system_" belong to the server: that is where
+      // Here itself tells a person what happened to her reports (kind
+      // "system", written by the functions: store.addSystemNotice). No phone
+      // can create a conversation under such an id, of any kind, and the
+      // kind itself is refused below like every kind other than "founder".
       allow create: if canWrite()
-        && request.auth.uid in request.resource.data.participants;
+        && !threadId.matches('system_.*')
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants.size() == 2
+        && request.resource.data.participants[0] != request.resource.data.participants[1]
+        && onlyAppFields(request.resource.data)
+        && request.resource.data.get('isManuallyFrozen', false) == false
+        && request.resource.data.get('hasExtendedOnce', false) == false
+        && (request.resource.data.get('kind', '') == 'founder'
+            ? startsWithFounder(request.resource.data)
+            : (!('kind' in request.resource.data)
+               && request.resource.data.expiresAt <= request.time + duration.value(50, 'h')
+               && startsFromLivePost(request.resource.data)))
+        && !hasBlockedMe(otherOf(request.resource.data.participants));
+
+      // Participants may only: stamp their read time, answer "continue?",
+      // end the chat, or extend it once after both said yes. Nobody can
+      // reopen an ended chat, change who is in it, or push its expiry out.
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.participants
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['lastRead', 'continueChoices', 'isManuallyFrozen', 'expiresAt', 'hasExtendedOnce'])
+        && !(resource.data.get('isManuallyFrozen', false) == true
+             && request.resource.data.get('isManuallyFrozen', false) != true)
+        // In Here's own conversation the only thing a person can do is mark
+        // it read: it cannot be ended, and there is nothing to continue.
+        && (resource.data.get('kind', '') != 'system'
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastRead']))
+        // Each person answers "continue?" only for herself (the extension
+        // write below resets both answers at once).
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['continueChoices'])
+            || request.resource.data.continueChoices
+                 .diff(resource.data.get('continueChoices', {})).affectedKeys()
+                 .hasOnly([request.auth.uid])
+            || isTheOneExtension())
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['expiresAt', 'hasExtendedOnce'])
+            || isTheOneExtension());
 
       match /messages/{messageId} {
+        function thread() {
+          return get(/databases/$(database)/documents/threads/$(threadId)).data;
+        }
+        // Everything about the parent conversation, from one read of it: the
+        // sender is in it, it has not ended, and the other person has not
+        // blocked her.
+        function openTo(t) {
+          return request.auth.uid in t.participants
+            // Only Here speaks in Here's own conversation (kind "system");
+            // its lines are written by the server.
+            && t.get('kind', '') != 'system'
+            && t.get('isManuallyFrozen', false) != true
+            && t.expiresAt > request.time - duration.value(5, 'm')
+            && !hasBlockedMe(otherOf(t.participants));
+        }
+
+        // A photo message names a file by its path in Storage, and only a
+        // file the sender uploaded herself for this conversation:
+        // chats/{this conversation}/{her uid}/{name}.jpg. (storage.rules lets
+        // only the two participants read anything under chats/{conversation}.)
+        function ownChatPhoto(path) {
+          let parts = path.split('/');
+          return parts.size() == 4
+            && parts[0] == 'chats'
+            && parts[1] == threadId
+            && parts[2] == request.auth.uid
+            && parts[3].matches('[A-Za-z0-9_-]+[.]jpg');
+        }
+        // The switch for photos in conversations: config/app.chatPhotos.
+        // Absent means on; false turns them off for everyone at once.
+        function chatPhotosOn() {
+          return !exists(/databases/$(database)/documents/config/app)
+            || get(/databases/$(database)/documents/config/app).data.get('chatPhotos', true) != false;
+        }
+
         allow read: if signedIn()
           && request.auth.uid in
             get(/databases/$(database)/documents/threads/$(threadId))
               .data.participants;
         // senderUID is pinned so a participant can't forge messages as the
         // other person. 'system' stays writable because the app itself creates
-        // system messages from the client (thread start, extensions).
+        // system messages from the client (thread start, extensions) — but
+        // only those two exact texts, so nobody can fake an official notice.
+        // Ended or expired conversations take no new messages, and nothing
+        // can be sent to someone who has blocked the sender.
+        //
+        // A message is text, and it may carry one photo. Nothing else can be
+        // written on it: the marks the server puts on a message (imageOK:
+        // the photo was checked; auto: the founder's welcome) must not be
+        // forgeable. Messages are never edited or deleted from a phone.
         allow create: if canWrite()
-          && request.auth.uid in
-            get(/databases/$(database)/documents/threads/$(threadId))
-              .data.participants
-          && request.resource.data.senderUID in [request.auth.uid, 'system'];
+          && openTo(thread())
+          && request.resource.data.keys().hasOnly(['text', 'senderUID', 'createdAt', 'imagePath'])
+          && (request.resource.data.senderUID == request.auth.uid
+              || (request.resource.data.senderUID == 'system'
+                  && (request.resource.data.text == 'Conversation continued for 48 hours.'
+                      || request.resource.data.text.matches('(?s)Started from: ".*"'))))
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 10000
+          && (!('imagePath' in request.resource.data)
+              || (request.resource.data.senderUID == request.auth.uid
+                  && request.resource.data.imagePath is string
+                  && ownChatPhoto(request.resource.data.imagePath)
+                  && chatPhotosOn()));
       }
     }
 
@@ -86,20 +320,48 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == userId;
     }
 
+    // What every phone needs to know and nobody may change from a phone:
+    // who the founder is, the name and the welcome she shows, and whether
+    // photos in conversations are switched on. Written in the console only.
+    // Nothing private belongs in here.
+    match /config/{doc} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     // Moderation data: console-only. No client may read or write.
     match /bannedPhones/{phone} { allow read, write: if false; }
     match /approvedPhones/{phone} { allow read, write: if false; }
     match /settings/{doc} { allow read, write: if false; }
+    // Written by Cloud Functions only (see functions/): what was removed
+    // automatically and why, per-person counters, and outgoing mail.
+    match /modLog/{doc} { allow read, write: if false; }
+    match /rateLimits/{doc} { allow read, write: if false; }
+    match /mail/{doc} { allow read, write: if false; }
 
     // Abuse reports. Write-only for clients: anyone signed in can file a
     // report as themselves, nobody can read, edit or delete one. Moderators
     // read them in the Firebase console (which bypasses rules).
+    //
+    // A report can name several reasons at once. The app writes them twice:
+    // `reasons` is the list (at most the eight the app offers), `reason` is
+    // the same list as one line of text, for the moderators' notification.
     match /reports/{reportId} {
+      function shortText(list, i) {
+        return list.size() <= i || (list[i] is string && list[i].size() <= 100);
+      }
+      function reasonList(list) {
+        return list is list && list.size() >= 1 && list.size() <= 8
+          && shortText(list, 0) && shortText(list, 1) && shortText(list, 2) && shortText(list, 3)
+          && shortText(list, 4) && shortText(list, 5) && shortText(list, 6) && shortText(list, 7);
+      }
+
       allow create: if signedIn()
         && request.resource.data.reporterUID == request.auth.uid
         && request.resource.data.type in ['post', 'chat']
         && request.resource.data.reason is string
-        && request.resource.data.reason.size() <= 100
+        && request.resource.data.reason.size() <= 400
+        && (!('reasons' in request.resource.data) || reasonList(request.resource.data.reasons))
         && request.resource.data.get('details', '').size() <= 1000
         && request.resource.data.createdAt == request.time;
     }
@@ -109,10 +371,12 @@ service cloud.firestore {
     // { available: bool, lastSeen: server timestamp }
     match /voicePresence/{userId} {
       allow read: if signedIn();
-      allow write: if canWrite() && request.auth.uid == userId
+      allow create, update: if canWrite() && request.auth.uid == userId
         && request.resource.data.keys().hasOnly(['available', 'lastSeen'])
         && request.resource.data.available is bool
         && request.resource.data.lastSeen == request.time;
+      // Account deletion removes it (allowed even when banned).
+      allow delete: if signedIn() && request.auth.uid == userId;
     }
   }
 }

@@ -1,0 +1,19 @@
+{
+  "name": "here-rules-tests",
+  "description": "Security-rules tests for Here. Run inside the Firestore and Storage emulators: npm test",
+  "private": true,
+  "engines": {
+    "node": ">=24.12"
+  },
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore,storage --project demo-here \"node --test --test-concurrency=1 --test-force-exit --test-timeout=120000\"",
+    "typecheck": "tsc -p jsconfig.json"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "@types/node": "^24.19.2",
+    "firebase": "^13.0.0",
+    "firebase-tools": "^15.36.0",
+    "typescript": "^5.9.0"
+  }
+}

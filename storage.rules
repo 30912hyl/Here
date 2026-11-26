@@ -7,17 +7,68 @@ service firebase.storage {
 
     // Post photos live at posts/{authorUid}/{postFolder}/{image}.jpg.
     // Anyone signed in can view; only the owner can upload into their own
-    // folder, and only reasonable-sized images.
+    // folder, and only reasonable-sized JPEGs (the only format the app
+    // produces, and one the automatic photo check can always read).
+    //
+    // A photo can be created but never replaced: it is checked once, right
+    // after it is posted, and that check would mean nothing if the file
+    // could be overwritten afterwards. The app always uploads to a new path.
+    // ("resource == null" says it outright: there is no file there yet.)
     match /posts/{userId}/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create: if resource == null
+        && request.auth != null
         && request.auth.uid == userId
-        && request.resource.contentType.matches('image/.*')
+        && request.auth.token.phone_number != null
+        && request.resource.contentType == 'image/jpeg'
         && request.resource.size < 10 * 1024 * 1024;
       allow delete: if request.auth != null
         && request.auth.uid == userId;
     }
 
-    // Everything outside posts/ is denied by default (no match = no access).
+    // Photos sent in a conversation live at
+    // chats/{conversation}/{senderUid}/{name}.jpg.
+    //
+    // Only the two people in that conversation can view them: who they are
+    // is read from the conversation itself, in Firestore. (That needs the
+    // "cross-service rules" permission on the project; see functions/README.md.)
+    // Only a participant can add one, into her own folder, while the
+    // conversation is still open, and only a reasonable-sized JPEG. As with
+    // post photos, a file can be created but never replaced, because it is
+    // checked once, right after it is sent.
+    //
+    // The server deletes them when the conversation is over (functions/).
+    match /chats/{threadId}/{userId}/{fileName} {
+      function thread() {
+        return firestore.get(/databases/(default)/documents/threads/$(threadId)).data;
+      }
+      // The same switch firestore.rules reads: config/app.chatPhotos.
+      function chatPhotosOn() {
+        return !firestore.exists(/databases/(default)/documents/config/app)
+          || firestore.get(/databases/(default)/documents/config/app).data.get('chatPhotos', true) != false;
+      }
+
+      allow read: if request.auth != null
+        && request.auth.uid in thread().participants;
+      allow create: if resource == null
+        && request.auth != null
+        && request.auth.uid == userId
+        && request.auth.token.phone_number != null
+        && request.resource.contentType == 'image/jpeg'
+        && request.resource.size < 10 * 1024 * 1024
+        && fileName.matches('[A-Za-z0-9_-]+[.]jpg')
+        && request.auth.uid in thread().participants
+        && thread().get('isManuallyFrozen', false) != true
+        && thread().expiresAt > request.time
+        && chatPhotosOn();
+      // The sender can take her own photo back (the app does this when the
+      // message that should carry it could not be sent).
+      allow delete: if request.auth != null
+        && request.auth.uid == userId;
+    }
+
+    // Everything outside posts/ and chats/ is denied by default (no match =
+    // no access). That includes reportEvidence/, where the server keeps the
+    // photos of a reported conversation for the moderators.
   }
 }
